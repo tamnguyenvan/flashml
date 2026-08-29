@@ -27,7 +27,7 @@ serverurl=unix:///tmp/flashml-supervisor.sock
 ; GPU Worker: MoGe-3 (reconstruction / depth / point map)
 ; -----------------------------------------------------------------------------
 [program:flashml-moge]
-command=%(ENV_CONDA_ROOT)s/envs/flashml-moge/bin/uvicorn flashml.app:app --host 127.0.0.1 --port 8001 --workers 1 --timeout-keep-alive 75
+command=%(ENV_CONDA_ROOT)s/flashml-moge/bin/uvicorn flashml.app:app --host 127.0.0.1 --port 8001 --workers 1 --timeout-keep-alive 75
 directory=%(ENV_FLASHML_HOME)s
 autostart=true
 autorestart=true
@@ -44,7 +44,7 @@ environment=FLASHML_ENABLED_ROUTES="reconstruct",FLASHML_PRELOAD="true",FLASHML_
 ; GPU Worker: SimpleClick (interactive segmentation)
 ; -----------------------------------------------------------------------------
 [program:flashml-simpleclick]
-command=%(ENV_CONDA_ROOT)s/envs/flashml-simpleclick/bin/uvicorn flashml.app:app --host 127.0.0.1 --port 8002 --workers 1 --timeout-keep-alive 75
+command=%(ENV_CONDA_ROOT)s/flashml-simpleclick/bin/uvicorn flashml.app:app --host 127.0.0.1 --port 8002 --workers 1 --timeout-keep-alive 75
 directory=%(ENV_FLASHML_HOME)s
 autostart=true
 autorestart=true
@@ -61,7 +61,7 @@ environment=FLASHML_ENABLED_ROUTES="interactive-segment",FLASHML_PRELOAD="true",
 ; GPU Worker: OneFormer (semantic segmentation)
 ; -----------------------------------------------------------------------------
 [program:flashml-oneformer]
-command=%(ENV_CONDA_ROOT)s/envs/flashml-oneformer/bin/uvicorn flashml.app:app --host 127.0.0.1 --port 8003 --workers 1 --timeout-keep-alive 75
+command=%(ENV_CONDA_ROOT)s/flashml-oneformer/bin/uvicorn flashml.app:app --host 127.0.0.1 --port 8003 --workers 1 --timeout-keep-alive 75
 directory=%(ENV_FLASHML_HOME)s
 autostart=true
 autorestart=true
@@ -78,7 +78,7 @@ environment=FLASHML_ENABLED_ROUTES="segment",FLASHML_PRELOAD="true",FLASHML_REQU
 ; GPU Worker: LaMa (object removal / inpainting)
 ; -----------------------------------------------------------------------------
 [program:flashml-lama]
-command=%(ENV_CONDA_ROOT)s/envs/flashml-lama/bin/uvicorn flashml.app:app --host 127.0.0.1 --port 8004 --workers 1 --timeout-keep-alive 75
+command=%(ENV_CONDA_ROOT)s/flashml-lama/bin/uvicorn flashml.app:app --host 127.0.0.1 --port 8004 --workers 1 --timeout-keep-alive 75
 directory=%(ENV_FLASHML_HOME)s
 autostart=true
 autorestart=true
@@ -96,7 +96,7 @@ environment=FLASHML_ENABLED_ROUTES="remove",FLASHML_PRELOAD="true",FLASHML_REQUI
 ; Set FLASHML_API_KEYS to comma-separated keys to enable authentication (empty = auth disabled)
 ; -----------------------------------------------------------------------------
 [program:flashml-api]
-command=%(ENV_CONDA_ROOT)s/envs/flashml-api/bin/uvicorn flashml.app:app --host 0.0.0.0 --port 8000 --workers 1 --timeout-keep-alive 75
+command=%(ENV_CONDA_ROOT)s/flashml-api/bin/uvicorn flashml.app:app --host 0.0.0.0 --port 8000 --workers 1 --timeout-keep-alive 75
 directory=%(ENV_FLASHML_HOME)s
 autostart=true
 autorestart=true

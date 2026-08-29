@@ -23,19 +23,28 @@ if command -v apt-get >/dev/null 2>&1 && [ "$(id -u)" -eq 0 ]; then
     supervisor wget ca-certificates
 fi
 
-if [ ! -x "${CONDA_ROOT}/bin/conda" ]; then
+if command -v conda >/dev/null 2>&1; then
+  echo "Using existing conda: $(command -v conda)"
+  eval "$(conda shell.bash hook)"
+elif [ -f "${CONDA_ROOT}/etc/profile.d/conda.sh" ]; then
+  source "${CONDA_ROOT}/etc/profile.d/conda.sh"
+elif [ -f "/opt/conda/etc/profile.d/conda.sh" ]; then
+  source "/opt/conda/etc/profile.d/conda.sh"
+elif [ -f "/root/miniconda3/etc/profile.d/conda.sh" ]; then
+  source "/root/miniconda3/etc/profile.d/conda.sh"
+else
   echo "Installing Miniconda into ${CONDA_ROOT}"
   installer="/tmp/miniconda.sh"
   wget -q -O "${installer}" https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
   bash "${installer}" -b -p "${CONDA_ROOT}"
   rm -f "${installer}"
+  # shellcheck source=/dev/null
+  source "${CONDA_ROOT}/etc/profile.d/conda.sh"
 fi
 
-# shellcheck source=/dev/null
-source "${CONDA_ROOT}/etc/profile.d/conda.sh"
-conda config --set always_yes yes
-conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main || true
-conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r || true
+conda config --set always_yes yes || true
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main 2>/dev/null || true
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r 2>/dev/null || true
 
 create_env() {
   local name="$1"

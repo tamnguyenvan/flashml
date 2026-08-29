@@ -2,7 +2,17 @@
 set -euo pipefail
 
 FLASHML_HOME="${FLASHML_HOME:-$(cd "$(dirname "$0")/.." && pwd)}"
-CONDA_ROOT="${CONDA_ROOT:-${HOME}/miniconda3}"
+if [ -z "${CONDA_ROOT:-}" ]; then
+  if [ -d "/venv" ]; then
+    CONDA_ROOT="/venv"
+  elif [ -d "/opt/conda/envs" ]; then
+    CONDA_ROOT="/opt/conda/envs"
+  elif [ -d "${HOME}/miniconda3/envs" ]; then
+    CONDA_ROOT="${HOME}/miniconda3/envs"
+  else
+    CONDA_ROOT="/venv"
+  fi
+fi
 export FLASHML_HOME CONDA_ROOT PYTHONUNBUFFERED=1
 
 if [ ! -f "${FLASHML_HOME}/conf/supervisord.conf" ]; then
@@ -30,8 +40,8 @@ if ! command -v supervisord >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ ! -x "${CONDA_ROOT}/envs/flashml-api/bin/uvicorn" ]; then
-  echo "Conda envs missing. Run scripts/setup_conda.sh first." >&2
+if [ ! -x "${CONDA_ROOT}/flashml-api/bin/uvicorn" ]; then
+  echo "Conda envs missing at ${CONDA_ROOT}. Run scripts/setup_conda.sh first." >&2
   exit 1
 fi
 

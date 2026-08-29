@@ -4,7 +4,7 @@
 set -euo pipefail
 
 export FLASHML_HOME="${FLASHML_HOME:-/workspace/flashml}"
-export CONDA_ROOT="${CONDA_ROOT:-/workspace/miniconda3}"
+export CONDA_ROOT="${CONDA_ROOT:-/venv}"
 
 if [ ! -f "${FLASHML_HOME}/scripts/setup_conda.sh" ]; then
   echo "FlashML is not at ${FLASHML_HOME}. Clone the repo there first." >&2

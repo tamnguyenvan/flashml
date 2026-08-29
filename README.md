@@ -107,7 +107,7 @@ python -m pytest
 After `scripts/setup_conda.sh` has created the environments, start the gateway plus the four workers under Supervisor:
 
 ```bash
-FLASHML_HOME=$PWD CONDA_ROOT=$HOME/miniconda3 ./scripts/start.sh
+./scripts/start.sh
 ```
 
 Supervisor keeps all processes alive. `scripts/vastai_onstart.sh` automates the full Vast.ai boot sequence (env setup, cloning, and start).
@@ -176,7 +176,7 @@ Use the CUDA 12.8.1 driver image, `vastai/base-image:cuda-12.8.1-auto`. It provi
 ```bash
 # on the instance
 export FLASHML_HOME=/workspace/flashml
-export CONDA_ROOT=/workspace/miniconda3
+export CONDA_ROOT=/venv
 git clone <this-repo> "$FLASHML_HOME"
 cp "$FLASHML_HOME/conf/supervisord.conf.example" "$FLASHML_HOME/conf/supervisord.conf"
 bash "$FLASHML_HOME/scripts/vastai_onstart.sh"
