@@ -17,6 +17,8 @@ mkdir -p "${FLASHML_HOME}/third_party" "${FLASHML_HOME}/weights/simpleclick" \
 if command -v apt-get >/dev/null 2>&1 && [ "$(id -u)" -eq 0 ]; then
   apt-get update
   DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    -o Dpkg::Options::=--force-confdef \
+    -o Dpkg::Options::=--force-confold \
     build-essential ffmpeg git libgl1 libglib2.0-0 libgomp1 libsm6 libxext6 \
     supervisor wget ca-certificates
 fi
