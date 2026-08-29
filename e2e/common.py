@@ -1,0 +1,86 @@
+"""Shared helpers for the FlashML API client test scripts.
+
+These scripts exercise a *running* FlashML server (the FastAPI gateway plus its
+GPU workers), unlike the pytest suite under ``tests/`` which uses fake services.
+
+Run from the repo root, for example::
+
+    python e2e/test_health.py
+    python e2e/test_health.py --base-url http://127.0.0.1:8000
+
+Each script talks to ``FLASHML_BASE_URL`` (default ``http://localhost:8000``)
+unless overridden with ``--base-url``.
+"""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import os
+import struct
+import zlib
+
+DEFAULT_BASE_URL = "http://localhost:8000"
+
+
+def base_url() -> str:
+    """Resolve the gateway URL from env or a sensible default."""
+    return os.environ.get("FLASHML_BASE_URL", DEFAULT_BASE_URL)
+
+
+def build_parser(description: str) -> argparse.ArgumentParser:
+    """Standard CLI parser so every client script behaves the same way."""
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument(
+        "--base-url",
+        default=base_url(),
+        help=f"FlashML gateway URL (default: {base_url()})",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=600.0,
+        help="Request timeout in seconds (default: 600)",
+    )
+    return parser
+
+
+def make_png(width: int = 128, height: int = 128) -> bytes:
+    """Build a valid RGB PNG of the given size using only the standard library.
+
+    Produces a small gradient so it can be decoded by any model without pulling
+    in Pillow or OpenCV.
+    """
+    if width <= 0 or height <= 0:
+        raise ValueError("width and height must be positive")
+
+    def _chunk(chunk_type: bytes, data: bytes) -> bytes:
+        payload = struct.pack(">I", len(data)) + chunk_type + data
+        crc = zlib.crc32(chunk_type + data) & 0xFFFFFFFF
+        return payload + struct.pack(">I", crc)
+
+    def _v(value: int, size: int) -> int:
+        # Map a 0-based index to a 0..255 byte value.
+        return (value * 255) // max(size - 1, 1) if size > 1 else 0
+
+    signature = b"\x89PNG\r\n\x1a\n"
+    ihdr = _chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+
+    rows = bytearray()
+    for y in range(height):
+        rows.append(0)  # filter type 0 (None) for each scanline
+        for x in range(width):
+            rows.extend((_v(y, height), _v(x, width), 128))
+    idat = _chunk(b"IDAT", zlib.compress(bytes(rows), 9))
+
+    return signature + ihdr + idat + _chunk(b"IEND", b"")
+
+
+def png_base64(png: bytes | None = None) -> str:
+    """Return the PNG as raw base64 (no data URL prefix)."""
+    return base64.b64encode(png or make_png()).decode("ascii")
+
+
+def png_data_url(png: bytes | None = None) -> str:
+    """Return the PNG as a ``data:image/png;base64,...`` URL."""
+    return "data:image/png;base64," + png_base64(png)
