@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import httpx
 
-from e2e.common import build_parser, png_base64
+from e2e.common import auth_headers, build_parser, png_base64
 
 
 def run(
@@ -29,6 +29,7 @@ def run(
     positive_points: list[list[float]],
     negative_points: list[list[float]],
     threshold: float,
+    api_key: str,
 ) -> dict:
     payload = {
         "image": image_base64,
@@ -37,7 +38,7 @@ def run(
         "threshold": threshold,
     }
     print(f"POST {base_url}/interactive-segment")
-    response = client.post("/interactive-segment", json=payload)
+    response = client.post("/interactive-segment", json=payload, headers=auth_headers(api_key))
     response.raise_for_status()
 
     assert "X-Request-ID" in response.headers, "missing X-Request-ID on /interactive-segment"
@@ -108,6 +109,7 @@ def main() -> int:
                 positive_points,
                 negative_points,
                 args.threshold,
+                args.api_key,
             )
             print(f"  positive    : {body['positive_points_used']}")
             print(f"  negative    : {body['negative_points_used']}")

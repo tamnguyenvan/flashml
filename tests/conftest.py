@@ -122,3 +122,14 @@ def client():
         AppState.oneformer = FakeOneFormer()
         AppState.lama = FakeLama()
         yield test_client
+
+
+@pytest.fixture
+def client_auth():
+    app = create_app(_settings(api_keys="secret-1,secret-2"))
+    with TestClient(app) as test_client:
+        AppState.moge = FakeMoge()
+        AppState.simpleclick = FakeSimpleClick()
+        AppState.oneformer = FakeOneFormer()
+        AppState.lama = FakeLama()
+        yield test_client

@@ -78,11 +78,16 @@ fi
 conda run --no-capture-output -n flashml-simpleclick python -m pip install --upgrade pip
 conda run --no-capture-output -n flashml-simpleclick python -m pip install \
   torch==2.2.2 torchvision==0.17.2 --index-url https://download.pytorch.org/whl/cu121
+# mmcv==1.6.2's setup.py imports pkg_resources, which newer pip no longer ships
+# in its isolated build env. Pin an older setuptools (provides pkg_resources)
+# and build with --no-build-isolation so it uses the env's setuptools.
+conda run --no-capture-output -n flashml-simpleclick python -m pip install \
+  "setuptools<70"
 MMCV_WITH_OPS=0 conda run --no-capture-output -n flashml-simpleclick python -m pip install \
   "numpy==1.23.5" "opencv-python-headless>=4.10,<5" "Pillow>=9.5,<12" \
   "PyYAML>=6,<7" "protobuf==3.20.3" "tensorboard==2.8.0" "albumentations==0.5.2" \
   "Cython==0.29.32" "easydict>=1.9,<2" "mmcv==1.6.2" "scipy>=1.10,<2" \
-  "timm==0.6.11" "gdown>=5.2,<6"
+  "timm==0.6.11" "gdown>=5.2,<6" --no-build-isolation
 conda run --no-capture-output -n flashml-simpleclick python -m pip install -e "${FLASHML_HOME}"
 
 CHECKPOINT="${FLASHML_HOME}/weights/simpleclick/cocolvis_vit_huge.pth"

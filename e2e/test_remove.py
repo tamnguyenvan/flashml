@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import httpx
 
-from e2e.common import build_parser, make_mask_png, make_png
+from e2e.common import auth_headers, build_parser, make_mask_png, make_png
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
@@ -32,10 +32,12 @@ def run(
     image_filename: str,
     mask_filename: str,
     max_size: int,
+    api_key: str,
 ) -> bytes:
     print(f"POST {base_url}/remove")
     response = client.post(
         "/remove",
+        headers=auth_headers(api_key),
         files={
             "file": (image_filename, image_bytes, "image/png"),
             "mask": (mask_filename, mask_bytes, "image/png"),
@@ -85,6 +87,7 @@ def main() -> int:
                 image_filename,
                 mask_filename,
                 args.max_size,
+                args.api_key,
             )
             print(f"  output      : image/png, {len(result)} bytes")
             if args.out:

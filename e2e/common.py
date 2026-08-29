@@ -42,7 +42,19 @@ def build_parser(description: str) -> argparse.ArgumentParser:
         default=600.0,
         help="Request timeout in seconds (default: 600)",
     )
+    parser.add_argument(
+        "--api-key",
+        default=os.environ.get("FLASHML_API_KEY", ""),
+        help="X-API-Key header value (default: $FLASHML_API_KEY or empty)",
+    )
     return parser
+
+
+def auth_headers(api_key: str) -> dict[str, str]:
+    """Headers carrying the API key, if one was provided."""
+    if api_key:
+        return {"X-API-Key": api_key}
+    return {}
 
 
 def make_png(width: int = 128, height: int = 128) -> bytes:

@@ -11,7 +11,7 @@ from flashml import __version__
 from flashml.config import Settings, get_settings
 from flashml.errors import register_exception_handlers
 from flashml.logging import setup_logging
-from flashml.middleware import RequestContextMiddleware
+from flashml.middleware import APIKeyMiddleware, RequestContextMiddleware
 from flashml.routers import health, interactive_segment, reconstruct, remove, segment
 from flashml.services.lama import build_lama_service
 from flashml.services.moge import build_moge_service
@@ -74,6 +74,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     register_exception_handlers(app)
     app.add_middleware(RequestContextMiddleware, header_name=settings.request_id_header)
+    app.add_middleware(APIKeyMiddleware, allowed_keys=settings.enabled_api_keys)
 
     app.include_router(health.router)
     if settings.is_enabled("reconstruct"):

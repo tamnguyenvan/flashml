@@ -19,12 +19,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import httpx
 
-from e2e.common import build_parser
+from e2e.common import auth_headers, build_parser
 
 
-def check_health(client: httpx.Client, base_url: str) -> None:
+def check_health(client: httpx.Client, base_url: str, api_key: str) -> None:
     print(f"GET {base_url}/health")
-    response = client.get("/health")
+    response = client.get("/health", headers=auth_headers(api_key))
     response.raise_for_status()
     body = response.json()
 
@@ -41,9 +41,9 @@ def check_health(client: httpx.Client, base_url: str) -> None:
     print("  OK")
 
 
-def check_ready(client: httpx.Client, base_url: str) -> None:
+def check_ready(client: httpx.Client, base_url: str, api_key: str) -> None:
     print(f"GET {base_url}/ready")
-    response = client.get("/ready")
+    response = client.get("/ready", headers=auth_headers(api_key))
 
     if response.status_code == 200:
         status = response.json()["status"]
@@ -64,8 +64,8 @@ def main() -> int:
 
     with httpx.Client(base_url=args.base_url, timeout=args.timeout) as client:
         try:
-            check_health(client, args.base_url)
-            check_ready(client, args.base_url)
+            check_health(client, args.base_url, args.api_key)
+            check_ready(client, args.base_url, args.api_key)
         except AssertionError as exc:
             print(f"FAILED: {exc}", file=sys.stderr)
             return 1

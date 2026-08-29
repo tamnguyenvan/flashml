@@ -19,12 +19,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import httpx
 
-from e2e.common import build_parser, png_data_url
+from e2e.common import auth_headers, build_parser, png_data_url
 
 
-def run(client: httpx.Client, base_url: str, image_data_url: str) -> dict:
+def run(client: httpx.Client, base_url: str, image_data_url: str, api_key: str) -> dict:
     print(f"POST {base_url}/segment")
-    response = client.post("/segment", json={"image": image_data_url})
+    response = client.post("/segment", json={"image": image_data_url}, headers=auth_headers(api_key))
     response.raise_for_status()
 
     assert "X-Request-ID" in response.headers, "missing X-Request-ID on /segment"
@@ -49,7 +49,7 @@ def main() -> int:
 
     with httpx.Client(base_url=args.base_url, timeout=args.timeout) as client:
         try:
-            body = run(client, args.base_url, image_data_url)
+            body = run(client, args.base_url, image_data_url, args.api_key)
             print(f"  model       : {body.get('model')}")
             print(f"  provider    : {body.get('provider')}")
             print(f"  image size  : {body.get('image_size_hw')}")

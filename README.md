@@ -25,6 +25,7 @@ Routers stay HTTP-only. Inference lives in `src/flashml/services/`.
 - [Installation](#installation)
 - [Usage](#usage)
   - [Run the API](#run-the-api)
+  - [API-key authentication (optional)](#api-key-authentication-optional)
   - [Run the tests](#run-the-tests)
   - [Launch GPU workers](#launch-gpu-workers)
 - [Request contracts](#request-contracts)
@@ -80,6 +81,20 @@ uvicorn flashml.app:app --host 0.0.0.0 --port 8000
 ```
 
 Configuration is read from `FLASHML_*` environment variables (see `.env.example`) and loaded automatically from a `.env` file when present. Set `FLASHML_ENABLED_ROUTES` to restrict which routes load (`all`, `reconstruct`, `interactive-segment`, `segment`, or `remove`).
+
+### API-key authentication (optional)
+
+Requests to the inference routes require an `X-API-Key` header **only if** `FLASHML_API_KEYS` is set (comma-separated list of accepted keys). When it's empty, auth is disabled.
+
+```bash
+curl -X POST http://localhost:8000/remove \
+  -H "X-API-Key: <your-key>" \
+  -F file=@room.png -F mask=@mask.png
+```
+
+- A missing or invalid key returns `401` with `{"error", "code": "unauthorized", "request_id"}`.
+- `/health`, `/ready`, and the docs (`/docs`, `/openapi.json`, `/redoc`) remain public even when auth is enabled.
+- On Vast.ai, only the public gateway needs auth configured — the internal workers on `127.0.0.1` run with auth off. In `conf/supervisord.conf`, set `FLASHML_API_KEYS` on the `flashml-api` program (replace the `change-me-to-a-strong-secret` placeholder).
 
 ### Run the tests
 

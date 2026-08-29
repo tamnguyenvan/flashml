@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     inference_timeout_s: float = 600.0
     max_upload_bytes: int = 25 * 1024 * 1024
 
+    # Comma-separated list of accepted X-API-Key values. Empty disables auth.
+    api_keys: str = ""
+
     enabled_routes: str = "all"
     reconstruct_url: str | None = None
     interactive_segment_url: str | None = None
@@ -95,6 +98,11 @@ class Settings(BaseSettings):
 
     def is_enabled(self, route: RouteName) -> bool:
         return route in self.routes
+
+    @property
+    def enabled_api_keys(self) -> frozenset[str]:
+        """Accepted API keys as a set; empty when auth is disabled."""
+        return frozenset(key.strip() for key in self.api_keys.split(",") if key.strip())
 
 
 @lru_cache

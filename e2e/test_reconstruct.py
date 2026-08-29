@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import httpx
 
-from e2e.common import build_parser, make_png
+from e2e.common import auth_headers, build_parser, make_png
 
 EXPECTED_ARCHIVE_MEMBERS = {"point_map.npy", "metadata.json"}
 
@@ -33,10 +33,11 @@ def _load_image(path: str | None) -> tuple[bytes, str]:
     return make_png(256, 256), "sample.png"
 
 
-def run_reconstruct(client: httpx.Client, base_url: str, image: bytes, filename: str) -> bytes:
+def run_reconstruct(client: httpx.Client, base_url: str, image: bytes, filename: str, api_key: str) -> bytes:
     print(f"POST {base_url}/reconstruct")
     response = client.post(
         "/reconstruct",
+        headers=auth_headers(api_key),
         files={"file": (filename, image, "image/png")},
         data={
             "include_mesh": "false",
@@ -78,7 +79,7 @@ def main() -> int:
 
     with httpx.Client(base_url=args.base_url, timeout=args.timeout) as client:
         try:
-            archive = run_reconstruct(client, args.base_url, image, filename)
+            archive = run_reconstruct(client, args.base_url, image, filename, args.api_key)
             inspect_archive(archive)
         except AssertionError as exc:
             print(f"FAILED: {exc}", file=sys.stderr)

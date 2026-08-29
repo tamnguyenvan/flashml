@@ -93,3 +93,38 @@ def test_remove_requires_mask(client):
         files={"file": ("room.png", PNG_1X1, "image/png")},
     )
     assert response.status_code in (422, 400)
+
+
+def test_auth_rejects_missing_key(client_auth):
+    response = client_auth.post(
+        "/reconstruct",
+        files={"file": ("tiny.png", PNG_1X1, "image/png")},
+    )
+    assert response.status_code == 401
+    body = response.json()
+    assert body["code"] == "unauthorized"
+    assert "X-Request-ID" in response.headers
+
+
+def test_auth_rejects_invalid_key(client_auth):
+    response = client_auth.post(
+        "/segment",
+        headers={"X-API-Key": "wrong-key"},
+        json={"image": "data:image/png;base64," + base64.b64encode(PNG_1X1).decode("ascii")},
+    )
+    assert response.status_code == 401
+
+
+def test_auth_accepts_valid_key(client_auth):
+    response = client_auth.post(
+        "/reconstruct",
+        headers={"X-API-Key": "secret-2"},
+        files={"file": ("tiny.png", PNG_1X1, "image/png")},
+    )
+    assert response.status_code == 200
+
+
+def test_auth_health_stays_public(client_auth):
+    response = client_auth.get("/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
