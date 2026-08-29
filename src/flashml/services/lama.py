@@ -1,13 +1,13 @@
 """LaMa inpainting backend for object removal (``POST /remove``).
 
-The local path loads the LaMa big model from the ``iopaint``/``lama-cleaner``
-package, which must be installed in the dedicated ``flashml-lama`` conda env
-(see ``envs/environment-lama.yml`` and ``scripts/setup_conda.sh``). The remote
-path simply proxies to a dedicated LaMa GPU worker.
+The local path loads the ``big-lama`` TorchScript model via the
+``simple-lama-inpainting`` package. The remote path simply proxies to a
+dedicated LaMa GPU worker. This follows the same pattern as the other services.
 """
 
 from __future__ import annotations
 
+import io
 import logging
 import threading
 
@@ -19,33 +19,28 @@ from flashml.services.proxy import InferenceProxy
 logger = logging.getLogger(__name__)
 
 
-def _decode_bgr(image_bytes: bytes, *, field: str):
-    import cv2
-    import numpy as np
+def _decode_rgb(image_bytes: bytes):
+    from PIL import Image
 
-    image = cv2.imdecode(np.frombuffer(image_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
-    if image is None:
-        raise InvalidImageError(f"{field} could not be decoded; use a PNG or JPEG image")
-    return image
-
-
-def _decode_mask(mask_bytes: bytes, *, field: str = "mask"):
-    import cv2
-    import numpy as np
-
-    mask = cv2.imdecode(np.frombuffer(mask_bytes, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
-    if mask is None:
-        raise InvalidImageError(f"{field} could not be decoded; use a single-channel PNG")
-    return mask
+    try:
+        return Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    except (OSError, ValueError) as exc:
+        raise InvalidImageError("file could not be decoded; use a PNG or JPEG image") from exc
 
 
-def _mask_png(mask) -> bytes:
-    import cv2
+def _decode_mask(mask_bytes: bytes):
+    from PIL import Image
 
-    ok, buffer = cv2.imencode(".png", mask)
-    if not ok:
-        raise RuntimeError("failed to encode inpainted result")
-    return buffer.tobytes()
+    try:
+        return Image.open(io.BytesIO(mask_bytes)).convert("L")
+    except (OSError, ValueError) as exc:
+        raise InvalidImageError("mask could not be decoded; use a single-channel PNG") from exc
+
+
+def _pil_to_png(image) -> bytes:
+    output = io.BytesIO()
+    image.save(output, format="PNG")
+    return output.getvalue()
 
 
 class LamaService:
@@ -74,65 +69,60 @@ class LamaService:
             detail=str(self.settings.lama_model_dir),
         )
 
-    def remove(
-        self,
-        image_bytes: bytes,
-        mask_bytes: bytes,
-        *,
-        max_size: int,
-    ) -> bytes:
+    def remove(self, image_bytes: bytes, mask_bytes: bytes, *, max_size: int) -> bytes:
         self.preload()
-        image_bgr = _decode_bgr(image_bytes, field="file")
+        image = _decode_rgb(image_bytes)
         mask = _decode_mask(mask_bytes)
 
-        height, width = mask.shape[:2]
-        longest = max(height, width)
-        scale = max_size / longest if longest > max_size else 1.0
-        if scale < 1.0:
-            import cv2
+        from PIL import Image
 
-            new_size = (max(1, round(width * scale)), max(1, round(height * scale)))
-            image_bgr = cv2.resize(image_bgr, new_size, interpolation=cv2.INTER_AREA)
-            mask = cv2.resize(mask, new_size, interpolation=cv2.INTER_NEAREST)
+        if mask.size != image.size:
+            mask = mask.resize(image.size, Image.NEAREST)
+
+        longest = max(image.size)
+        if longest > max_size:
+            new_size = (
+                max(1, round(image.width * max_size / longest)),
+                max(1, round(image.height * max_size / longest)),
+            )
+            image = image.resize(new_size, Image.BILINEAR)
+            mask = mask.resize(new_size, Image.NEAREST)
 
         with self._lock:
-            return self._infer_locked(image_bgr, mask)
+            result = self._infer_locked(image, mask)
+
+        # simple-lama-inpainting pads dimensions to a multiple of 8 internally.
+        # Crop back to the target image dimensions if needed.
+        if result.size != image.size:
+            result = result.crop((0, 0, image.width, image.height))
+
+        return _pil_to_png(result)
 
     def _load_locked(self) -> None:
         import torch
+        from simple_lama_inpainting import SimpleLama
 
         if self.settings.require_cuda and not torch.cuda.is_available():
             raise InferenceError("CUDA is required for LaMa but is not available")
 
-        self.device = torch.device(self.settings.device if torch.cuda.is_available() else "cpu")
-        try:
-            from iopaint import LaMa
-        except ImportError:
-            from lama_cleaner import LaMa
-        except Exception as exc:  # pragma: no cover - defensive
-            raise InferenceError(
-                "iopaint (lama-cleaner) is not installed in the flashml-lama environment"
-            ) from exc
+        # Point the package at a local TorchScript model if we already downloaded one.
+        if (self.settings.lama_model_dir / "big-lama.pt").is_file():
+            import os
 
-        logger.info("Loading LaMa big model from %s", self.settings.lama_model_dir)
-        self.model = LaMa(device=self.device, model_dir=str(self.settings.lama_model_dir))
+            os.environ["LAMA_MODEL"] = str(self.settings.lama_model_dir / "big-lama.pt")
+
+        self.device = torch.device(self.settings.device if torch.cuda.is_available() else "cpu")
+        logger.info("Loading simple-lama-inpainting big-lama on %s", self.device)
+        self.model = SimpleLama(device=self.device)
         self._ready = True
         logger.info("LaMa ready on %s", self.device)
 
-    def _infer_locked(self, image_bgr, mask) -> bytes:
-        import numpy as np
-
+    def _infer_locked(self, image, mask):
         try:
-            result = self.model(image_bgr, mask)
+            return self.model(image, mask)  # returns a PIL RGB image
         except Exception as exc:
             logger.exception("LaMa inference failed")
             raise InferenceError("LaMa inference failed") from exc
-        result = np.asarray(result)
-        if result.dtype != np.uint8:
-            result = np.clip(result * 255.0, 0, 255).astype(np.uint8)
-        if result.ndim == 2:
-            result = np.repeat(result[..., None], 3, axis=2)
-        return _mask_png(result)
 
 
 class RemoteLamaService:

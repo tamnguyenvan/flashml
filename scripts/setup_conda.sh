@@ -126,29 +126,24 @@ snapshot_download(repo_id="Ruicheng/moge-3-vitg", repo_type="model")
 print("MoGe weights ready")
 PY
 
-echo "Setting up LaMa (iopaint) environment..."
+echo "Setting up LaMa (simple-lama-inpainting) environment..."
 conda run --no-capture-output -n flashml-lama python -m pip install --upgrade pip
 conda run --no-capture-output -n flashml-lama python -m pip install \
   torch torchvision --index-url https://download.pytorch.org/whl/cu128
 conda run --no-capture-output -n flashml-lama python -m pip install \
-  "iopaint>=1.2,<2" opencv-python-headless Pillow
+  simple-lama-inpainting opencv-python-headless Pillow
 conda run --no-capture-output -n flashml-lama python -m pip install -e "${FLASHML_HOME}"
 
 LAMA_MODEL_DIR="${FLASHML_HOME}/weights/lama"
-if [ ! -d "${LAMA_MODEL_DIR}" ] || [ -z "$(ls -A "${LAMA_MODEL_DIR}" 2>/dev/null)" ]; then
-  echo "Downloading LaMa big-lama weights into ${LAMA_MODEL_DIR}"
+LAMA_MODEL_FILE="${LAMA_MODEL_DIR}/big-lama.pt"
+if [ ! -f "${LAMA_MODEL_FILE}" ]; then
+  echo "Downloading LaMa big-lama weights into ${LAMA_MODEL_FILE}"
+  mkdir -p "${LAMA_MODEL_DIR}"
+  wget -q --show-progress -O "${LAMA_MODEL_FILE}" \
+    "https://github.com/enesmsahin/simple-lama-inpainting/releases/download/v0.1.0/big-lama.pt" || \
   FLASHML_LAMA_MODEL_DIR="${LAMA_MODEL_DIR}" \
-    conda run --no-capture-output -n flashml-lama python - <<'PY'
-import os
-from pathlib import Path
-from iopaint import LaMa
-
-model_dir = Path(os.environ["FLASHML_LAMA_MODEL_DIR"])
-model_dir.mkdir(parents=True, exist_ok=True)
-# Instantiating with a missing model_dir triggers the built-in weight download.
-LaMa(device="cpu", model_dir=str(model_dir))
-print(f"LaMa weights ready at {model_dir}")
-PY
+    conda run --no-capture-output -n flashml-lama python -c "from torch.hub import download_url_to_file; download_url_to_file('https://github.com/enesmsahin/simple-lama-inpainting/releases/download/v0.1.0/big-lama.pt', '${LAMA_MODEL_FILE}')"
+  echo "LaMa weights ready at ${LAMA_MODEL_FILE}"
 fi
 
 echo
