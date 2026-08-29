@@ -5,11 +5,14 @@ FLASHML_HOME="${FLASHML_HOME:-$(cd "$(dirname "$0")/.." && pwd)}"
 CONDA_ROOT="${CONDA_ROOT:-${HOME}/miniconda3}"
 export FLASHML_HOME CONDA_ROOT PYTHONUNBUFFERED=1
 
-if [ -f "${FLASHML_HOME}/.env" ]; then
-  set -a
-  # shellcheck disable=SC1091
-  source "${FLASHML_HOME}/.env"
-  set +a
+if [ ! -f "${FLASHML_HOME}/conf/supervisord.conf" ]; then
+  if [ -f "${FLASHML_HOME}/conf/supervisord.conf.example" ]; then
+    echo "Creating conf/supervisord.conf from conf/supervisord.conf.example..."
+    cp "${FLASHML_HOME}/conf/supervisord.conf.example" "${FLASHML_HOME}/conf/supervisord.conf"
+  else
+    echo "Error: ${FLASHML_HOME}/conf/supervisord.conf not found." >&2
+    exit 1
+  fi
 fi
 
 export FLASHML_MOGE_ROOT="${FLASHML_MOGE_ROOT:-${FLASHML_HOME}/third_party/MoGe}"

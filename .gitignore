@@ -13,10 +13,11 @@ htmlcov/
 .venv/
 venv/
 
-# Env / secrets
+# Env / secrets / configs
 .env
 .env.*
-!.env.example
+conf/supervisord.conf
+!conf/supervisord.conf.example
 
 # Models, clones, logs
 third_party/

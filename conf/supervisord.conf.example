@@ -1,8 +1,11 @@
-; Supervisor config for Vast.ai / CUDA 12.8.
-; Paths are expanded from the process environment:
+; Supervisor config template for FlashML.
+; Copy this file to conf/supervisord.conf and adjust as needed:
+;   cp conf/supervisord.conf.example conf/supervisord.conf
+;
+; Environment variables expanded from the process environment when starting:
 ;   FLASHML_HOME, CONDA_ROOT
 ;
-; GPU workers bind to localhost. The API gateway is the only public port (8000).
+; GPU workers bind to localhost (8001-8004). The API gateway is the public port (8000).
 
 [unix_http_server]
 file=/tmp/flashml-supervisor.sock
@@ -20,6 +23,9 @@ supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface
 [supervisorctl]
 serverurl=unix:///tmp/flashml-supervisor.sock
 
+; -----------------------------------------------------------------------------
+; GPU Worker: MoGe-3 (reconstruction / depth / point map)
+; -----------------------------------------------------------------------------
 [program:flashml-moge]
 command=%(ENV_CONDA_ROOT)s/envs/flashml-moge/bin/uvicorn flashml.app:app --host 127.0.0.1 --port 8001 --workers 1 --timeout-keep-alive 75
 directory=%(ENV_FLASHML_HOME)s
@@ -34,6 +40,9 @@ stdout_logfile=%(ENV_FLASHML_HOME)s/logs/moge.out.log
 stderr_logfile=%(ENV_FLASHML_HOME)s/logs/moge.err.log
 environment=FLASHML_ENABLED_ROUTES="reconstruct",FLASHML_PRELOAD="true",FLASHML_REQUIRE_CUDA="true",FLASHML_PORT="8001",PYTHONPATH="%(ENV_FLASHML_HOME)s/src"
 
+; -----------------------------------------------------------------------------
+; GPU Worker: SimpleClick (interactive segmentation)
+; -----------------------------------------------------------------------------
 [program:flashml-simpleclick]
 command=%(ENV_CONDA_ROOT)s/envs/flashml-simpleclick/bin/uvicorn flashml.app:app --host 127.0.0.1 --port 8002 --workers 1 --timeout-keep-alive 75
 directory=%(ENV_FLASHML_HOME)s
@@ -48,6 +57,9 @@ stdout_logfile=%(ENV_FLASHML_HOME)s/logs/simpleclick.out.log
 stderr_logfile=%(ENV_FLASHML_HOME)s/logs/simpleclick.err.log
 environment=FLASHML_ENABLED_ROUTES="interactive-segment",FLASHML_PRELOAD="true",FLASHML_REQUIRE_CUDA="true",FLASHML_PORT="8002",PYTHONPATH="%(ENV_FLASHML_HOME)s/src"
 
+; -----------------------------------------------------------------------------
+; GPU Worker: OneFormer (semantic segmentation)
+; -----------------------------------------------------------------------------
 [program:flashml-oneformer]
 command=%(ENV_CONDA_ROOT)s/envs/flashml-oneformer/bin/uvicorn flashml.app:app --host 127.0.0.1 --port 8003 --workers 1 --timeout-keep-alive 75
 directory=%(ENV_FLASHML_HOME)s
@@ -62,6 +74,9 @@ stdout_logfile=%(ENV_FLASHML_HOME)s/logs/oneformer.out.log
 stderr_logfile=%(ENV_FLASHML_HOME)s/logs/oneformer.err.log
 environment=FLASHML_ENABLED_ROUTES="segment",FLASHML_PRELOAD="true",FLASHML_REQUIRE_CUDA="true",FLASHML_PORT="8003",PYTHONPATH="%(ENV_FLASHML_HOME)s/src"
 
+; -----------------------------------------------------------------------------
+; GPU Worker: LaMa (object removal / inpainting)
+; -----------------------------------------------------------------------------
 [program:flashml-lama]
 command=%(ENV_CONDA_ROOT)s/envs/flashml-lama/bin/uvicorn flashml.app:app --host 127.0.0.1 --port 8004 --workers 1 --timeout-keep-alive 75
 directory=%(ENV_FLASHML_HOME)s
@@ -76,6 +91,10 @@ stdout_logfile=%(ENV_FLASHML_HOME)s/logs/lama.out.log
 stderr_logfile=%(ENV_FLASHML_HOME)s/logs/lama.err.log
 environment=FLASHML_ENABLED_ROUTES="remove",FLASHML_PRELOAD="true",FLASHML_REQUIRE_CUDA="true",FLASHML_PORT="8004",PYTHONPATH="%(ENV_FLASHML_HOME)s/src"
 
+; -----------------------------------------------------------------------------
+; Public API Gateway
+; Set FLASHML_API_KEYS to comma-separated keys to enable authentication (empty = auth disabled)
+; -----------------------------------------------------------------------------
 [program:flashml-api]
 command=%(ENV_CONDA_ROOT)s/envs/flashml-api/bin/uvicorn flashml.app:app --host 0.0.0.0 --port 8000 --workers 1 --timeout-keep-alive 75
 directory=%(ENV_FLASHML_HOME)s
@@ -88,4 +107,4 @@ stopasgroup=true
 killasgroup=true
 stdout_logfile=%(ENV_FLASHML_HOME)s/logs/api.out.log
 stderr_logfile=%(ENV_FLASHML_HOME)s/logs/api.err.log
-environment=FLASHML_ENABLED_ROUTES="all",FLASHML_PRELOAD="false",FLASHML_REQUIRE_CUDA="false",FLASHML_RECONSTRUCT_URL="http://127.0.0.1:8001",FLASHML_INTERACTIVE_SEGMENT_URL="http://127.0.0.1:8002",FLASHML_SEGMENT_URL="http://127.0.0.1:8003",FLASHML_REMOVE_URL="http://127.0.0.1:8004",FLASHML_API_KEYS="change-me-to-a-strong-secret",FLASHML_PORT="8000",PYTHONPATH="%(ENV_FLASHML_HOME)s/src"
+environment=FLASHML_ENABLED_ROUTES="all",FLASHML_PRELOAD="false",FLASHML_REQUIRE_CUDA="false",FLASHML_RECONSTRUCT_URL="http://127.0.0.1:8001",FLASHML_INTERACTIVE_SEGMENT_URL="http://127.0.0.1:8002",FLASHML_SEGMENT_URL="http://127.0.0.1:8003",FLASHML_REMOVE_URL="http://127.0.0.1:8004",FLASHML_API_KEYS="",FLASHML_PORT="8000",PYTHONPATH="%(ENV_FLASHML_HOME)s/src"

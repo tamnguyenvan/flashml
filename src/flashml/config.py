@@ -19,8 +19,6 @@ ALL_ROUTES: tuple[RouteName, ...] = (
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="FLASHML_",
-        env_file=".env",
-        env_file_encoding="utf-8",
         extra="ignore",
     )
 

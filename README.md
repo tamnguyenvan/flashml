@@ -52,10 +52,10 @@ git clone <this-repo> flashml
 cd flashml
 ```
 
-Create a local environment file from the template and adjust as needed:
+Create the Supervisor configuration from the template:
 
 ```bash
-cp .env.example .env
+cp conf/supervisord.conf.example conf/supervisord.conf
 ```
 
 Install the package (editable) with its dev dependencies:
@@ -80,7 +80,7 @@ flashml --host 0.0.0.0 --port 8000
 uvicorn flashml.app:app --host 0.0.0.0 --port 8000
 ```
 
-Configuration is read from `FLASHML_*` environment variables (see `.env.example`) and loaded automatically from a `.env` file when present. Set `FLASHML_ENABLED_ROUTES` to restrict which routes load (`all`, `reconstruct`, `interactive-segment`, `segment`, or `remove`).
+Configuration is read from `FLASHML_*` environment variables. When running under Supervisor, process environment variables are configured directly in `conf/supervisord.conf`. Set `FLASHML_ENABLED_ROUTES` to restrict which routes load (`all`, `reconstruct`, `interactive-segment`, `segment`, or `remove`).
 
 ### API-key authentication (optional)
 
@@ -94,7 +94,7 @@ curl -X POST http://localhost:8000/remove \
 
 - A missing or invalid key returns `401` with `{"error", "code": "unauthorized", "request_id"}`.
 - `/health`, `/ready`, and the docs (`/docs`, `/openapi.json`, `/redoc`) remain public even when auth is enabled.
-- On Vast.ai, only the public gateway needs auth configured — the internal workers on `127.0.0.1` run with auth off. In `conf/supervisord.conf`, set `FLASHML_API_KEYS` on the `flashml-api` program (replace the `change-me-to-a-strong-secret` placeholder).
+- On multi-worker setups (local or Vast.ai), configure `FLASHML_API_KEYS` in `conf/supervisord.conf` on the `flashml-api` program. The internal workers on `127.0.0.1` run with auth off.
 
 ### Run the tests
 
@@ -178,7 +178,7 @@ Use the CUDA 12.8.1 driver image, `vastai/base-image:cuda-12.8.1-auto`. It provi
 export FLASHML_HOME=/workspace/flashml
 export CONDA_ROOT=/workspace/miniconda3
 git clone <this-repo> "$FLASHML_HOME"
-cp "$FLASHML_HOME/.env.example" "$FLASHML_HOME/.env"
+cp "$FLASHML_HOME/conf/supervisord.conf.example" "$FLASHML_HOME/conf/supervisord.conf"
 bash "$FLASHML_HOME/scripts/vastai_onstart.sh"
 ```
 
