@@ -53,8 +53,8 @@ create_env flashml-simpleclick "${FLASHML_HOME}/envs/environment-simpleclick.yml
 create_env flashml-oneformer "${FLASHML_HOME}/envs/environment-oneformer.yml"
 create_env flashml-lama "${FLASHML_HOME}/envs/environment-lama.yml"
 
-conda run -n flashml-api python -m pip install --upgrade pip
-conda run -n flashml-api python -m pip install -e "${FLASHML_HOME}"
+conda run --no-capture-output -n flashml-api python -m pip install --upgrade pip
+conda run --no-capture-output -n flashml-api python -m pip install -e "${FLASHML_HOME}"
 
 if [ ! -d "${FLASHML_HOME}/third_party/MoGe/.git" ]; then
   git clone --filter=blob:none --no-checkout https://github.com/microsoft/MoGe.git \
@@ -62,44 +62,44 @@ if [ ! -d "${FLASHML_HOME}/third_party/MoGe/.git" ]; then
   git -C "${FLASHML_HOME}/third_party/MoGe" checkout "${MOGE_REVISION}"
 fi
 
-conda run -n flashml-moge python -m pip install --upgrade pip
-conda run -n flashml-moge python -m pip install torch torchvision \
+conda run --no-capture-output -n flashml-moge python -m pip install --upgrade pip
+conda run --no-capture-output -n flashml-moge python -m pip install torch torchvision \
   --index-url https://download.pytorch.org/whl/cu128
-conda run -n flashml-moge python -m pip install -e "${FLASHML_HOME}"
-conda run -n flashml-moge python -m pip install -e "${FLASHML_HOME}/third_party/MoGe" \
+conda run --no-capture-output -n flashml-moge python -m pip install -e "${FLASHML_HOME}"
+conda run --no-capture-output -n flashml-moge python -m pip install -e "${FLASHML_HOME}/third_party/MoGe" \
   --extra-index-url https://pypi.org/simple
-conda run -n flashml-moge python -m pip install huggingface_hub trimesh opencv-python-headless Pillow
+conda run --no-capture-output -n flashml-moge python -m pip install huggingface_hub trimesh opencv-python-headless Pillow
 
 if [ ! -d "${FLASHML_HOME}/third_party/SimpleClick/.git" ]; then
   git clone --depth 1 --branch "${SIMPLECLICK_REF}" \
     https://github.com/uncbiag/SimpleClick "${FLASHML_HOME}/third_party/SimpleClick"
 fi
 
-conda run -n flashml-simpleclick python -m pip install --upgrade pip
-conda run -n flashml-simpleclick python -m pip install \
+conda run --no-capture-output -n flashml-simpleclick python -m pip install --upgrade pip
+conda run --no-capture-output -n flashml-simpleclick python -m pip install \
   torch==2.2.2 torchvision==0.17.2 --index-url https://download.pytorch.org/whl/cu121
-MMCV_WITH_OPS=0 conda run -n flashml-simpleclick python -m pip install \
+MMCV_WITH_OPS=0 conda run --no-capture-output -n flashml-simpleclick python -m pip install \
   "numpy==1.23.5" "opencv-python-headless>=4.10,<5" "Pillow>=9.5,<12" \
   "PyYAML>=6,<7" "protobuf==3.20.3" "tensorboard==2.8.0" "albumentations==0.5.2" \
   "Cython==0.29.32" "easydict>=1.9,<2" "mmcv==1.6.2" "scipy>=1.10,<2" \
   "timm==0.6.11" "gdown>=5.2,<6"
-conda run -n flashml-simpleclick python -m pip install -e "${FLASHML_HOME}"
+conda run --no-capture-output -n flashml-simpleclick python -m pip install -e "${FLASHML_HOME}"
 
 CHECKPOINT="${FLASHML_HOME}/weights/simpleclick/cocolvis_vit_huge.pth"
 if [ ! -f "${CHECKPOINT}" ]; then
-  conda run -n flashml-simpleclick gdown "${SIMPLECLICK_GDRIVE_ID}" -O "${CHECKPOINT}"
+  conda run --no-capture-output -n flashml-simpleclick gdown "${SIMPLECLICK_GDRIVE_ID}" -O "${CHECKPOINT}"
 fi
 
-conda run -n flashml-oneformer python -m pip install --upgrade pip
-conda run -n flashml-oneformer python -m pip install \
+conda run --no-capture-output -n flashml-oneformer python -m pip install --upgrade pip
+conda run --no-capture-output -n flashml-oneformer python -m pip install \
   torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu126
-conda run -n flashml-oneformer python -m pip install \
+conda run --no-capture-output -n flashml-oneformer python -m pip install \
   "transformers>=4.38,<5" "huggingface_hub>=0.20,<1" "Pillow>=9.5,<12" \
   "numpy<2" "scipy>=1.10,<1.16"
-conda run -n flashml-oneformer python -m pip install -e "${FLASHML_HOME}"
+conda run --no-capture-output -n flashml-oneformer python -m pip install -e "${FLASHML_HOME}"
 
 HF_HOME="${FLASHML_HOME}/weights/huggingface" \
-  conda run -n flashml-oneformer python - <<'PY'
+  conda run --no-capture-output -n flashml-oneformer python - <<'PY'
 from pathlib import Path
 import os
 from huggingface_hub import snapshot_download
@@ -114,7 +114,7 @@ snapshot_download(repo_id=model_id, local_dir=local_dir)
 PY
 
 HF_HOME="${FLASHML_HOME}/weights/huggingface" \
-  conda run -n flashml-moge python - <<'PY'
+  conda run --no-capture-output -n flashml-moge python - <<'PY'
 from huggingface_hub import snapshot_download
 print("Downloading Ruicheng/moge-3-vitg")
 snapshot_download(repo_id="Ruicheng/moge-3-vitg", repo_type="model")
@@ -122,18 +122,18 @@ print("MoGe weights ready")
 PY
 
 echo "Setting up LaMa (iopaint) environment..."
-conda run -n flashml-lama python -m pip install --upgrade pip
-conda run -n flashml-lama python -m pip install \
+conda run --no-capture-output -n flashml-lama python -m pip install --upgrade pip
+conda run --no-capture-output -n flashml-lama python -m pip install \
   torch torchvision --index-url https://download.pytorch.org/whl/cu128
-conda run -n flashml-lama python -m pip install \
+conda run --no-capture-output -n flashml-lama python -m pip install \
   "iopaint>=1.2,<2" opencv-python-headless Pillow
-conda run -n flashml-lama python -m pip install -e "${FLASHML_HOME}"
+conda run --no-capture-output -n flashml-lama python -m pip install -e "${FLASHML_HOME}"
 
 LAMA_MODEL_DIR="${FLASHML_HOME}/weights/lama"
 if [ ! -d "${LAMA_MODEL_DIR}" ] || [ -z "$(ls -A "${LAMA_MODEL_DIR}" 2>/dev/null)" ]; then
   echo "Downloading LaMa big-lama weights into ${LAMA_MODEL_DIR}"
   FLASHML_LAMA_MODEL_DIR="${LAMA_MODEL_DIR}" \
-    conda run -n flashml-lama python - <<'PY'
+    conda run --no-capture-output -n flashml-lama python - <<'PY'
 import os
 from pathlib import Path
 from iopaint import LaMa
