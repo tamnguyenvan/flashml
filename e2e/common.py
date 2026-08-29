@@ -76,6 +76,38 @@ def make_png(width: int = 128, height: int = 128) -> bytes:
     return signature + ihdr + idat + _chunk(b"IEND", b"")
 
 
+def make_mask_png(width: int = 128, height: int = 128) -> bytes:
+    """Build a grayscale binary mask PNG with a white region to remove.
+
+    The mask is black except for a white box near the center, and is suitable
+    for sending as the ``mask`` field of ``POST /remove``.
+    """
+    if width <= 0 or height <= 0:
+        raise ValueError("width and height must be positive")
+
+    def _chunk(chunk_type: bytes, data: bytes) -> bytes:
+        payload = struct.pack(">I", len(data)) + chunk_type + data
+        crc = zlib.crc32(chunk_type + data) & 0xFFFFFFFF
+        return payload + struct.pack(">I", crc)
+
+    signature = b"\x89PNG\r\n\x1a\n"
+    ihdr = _chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0))
+
+    # White box spanning the middle 40% of the image.
+    box_x0, box_x1 = round(width * 0.3), round(width * 0.7)
+    box_y0, box_y1 = round(height * 0.3), round(height * 0.7)
+
+    rows = bytearray()
+    for y in range(height):
+        rows.append(0)  # filter type 0
+        for x in range(width):
+            rows.append(255 if box_x0 <= x < box_x1 and box_y0 <= y < box_y1 else 0)
+    idat = _chunk(b"IDAT", zlib.compress(bytes(rows), 9))
+
+    return signature + ihdr + idat + _chunk(b"IEND", b"")
+
+
+
 def png_base64(png: bytes | None = None) -> str:
     """Return the PNG as raw base64 (no data URL prefix)."""
     return base64.b64encode(png or make_png()).decode("ascii")

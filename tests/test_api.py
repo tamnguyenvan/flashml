@@ -71,3 +71,25 @@ def test_segment_ok(client):
     body = response.json()
     assert body["provider"] == "oneformer"
     assert "wall" in body["masks"]
+
+
+def test_remove_ok(client):
+    response = client.post(
+        "/remove",
+        files={
+            "file": ("room.png", PNG_1X1, "image/png"),
+            "mask": ("mask.png", PNG_1X1, "image/png"),
+        },
+        data={"max_size": "800"},
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/png")
+    assert response.content == PNG_1X1
+
+
+def test_remove_requires_mask(client):
+    response = client.post(
+        "/remove",
+        files={"file": ("room.png", PNG_1X1, "image/png")},
+    )
+    assert response.status_code in (422, 400)

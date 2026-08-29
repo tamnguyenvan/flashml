@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from flashml.config import Settings
 
 if TYPE_CHECKING:
+    from flashml.services.lama import LamaService, RemoteLamaService
     from flashml.services.moge import MogeService, RemoteMogeService
     from flashml.services.oneformer import OneFormerService, RemoteOneFormerService
     from flashml.services.simpleclick import RemoteSimpleClickService, SimpleClickService
@@ -15,3 +16,4 @@ class AppState:
     moge: MogeService | RemoteMogeService | None = None
     simpleclick: SimpleClickService | RemoteSimpleClickService | None = None
     oneformer: OneFormerService | RemoteOneFormerService | None = None
+    lama: LamaService | RemoteLamaService | None = None

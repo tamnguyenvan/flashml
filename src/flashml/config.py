@@ -7,11 +7,12 @@ from typing import Literal
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-RouteName = Literal["reconstruct", "interactive-segment", "segment"]
+RouteName = Literal["reconstruct", "interactive-segment", "segment", "remove"]
 ALL_ROUTES: tuple[RouteName, ...] = (
     "reconstruct",
     "interactive-segment",
     "segment",
+    "remove",
 )
 
 
@@ -37,6 +38,7 @@ class Settings(BaseSettings):
     reconstruct_url: str | None = None
     interactive_segment_url: str | None = None
     segment_url: str | None = None
+    remove_url: str | None = None
 
     moge_model_repo: str = "Ruicheng/moge-3-vitg"
     moge_source_repo: str = "https://github.com/microsoft/MoGe.git"
@@ -55,9 +57,18 @@ class Settings(BaseSettings):
     oneformer_model_id: str = "shi-labs/oneformer_ade20k_swin_large"
     oneformer_model_dir: Path = Path("/workspace/flashml/weights/oneformer")
 
+    lama_model_dir: Path = Path("/workspace/flashml/weights/lama")
+    lama_max_longest_size: int = 1024
+
     request_id_header: str = "X-Request-ID"
 
-    @field_validator("reconstruct_url", "interactive_segment_url", "segment_url", mode="before")
+    @field_validator(
+        "reconstruct_url",
+        "interactive_segment_url",
+        "segment_url",
+        "remove_url",
+        mode="before",
+    )
     @classmethod
     def _empty_url_to_none(cls, value: object) -> object:
         if value == "":

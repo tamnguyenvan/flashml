@@ -99,6 +99,20 @@ class FakeOneFormer:
         )
 
 
+class FakeLama:
+    backend = "local"
+
+    def preload(self) -> None:
+        return None
+
+    def status(self) -> ServiceStatus:
+        return ServiceStatus(enabled=True, backend="local", ready=True, detail="fake")
+
+    def remove(self, image_bytes: bytes, mask_bytes: bytes, *, max_size: int) -> bytes:
+        # Return the input image untouched wrapped in a valid PNG container.
+        return PNG_1X1
+
+
 @pytest.fixture
 def client():
     app = create_app(_settings())
@@ -106,4 +120,5 @@ def client():
         AppState.moge = FakeMoge()
         AppState.simpleclick = FakeSimpleClick()
         AppState.oneformer = FakeOneFormer()
+        AppState.lama = FakeLama()
         yield test_client

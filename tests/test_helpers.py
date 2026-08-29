@@ -10,6 +10,7 @@ def test_enabled_routes_all():
         "reconstruct",
         "interactive-segment",
         "segment",
+        "remove",
     }
 
 

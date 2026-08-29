@@ -20,3 +20,9 @@ def get_oneformer():
     if AppState.oneformer is None:
         raise DependencyUnavailableError("segment service is not enabled")
     return AppState.oneformer
+
+
+def get_lama():
+    if AppState.lama is None:
+        raise DependencyUnavailableError("remove service is not enabled")
+    return AppState.lama

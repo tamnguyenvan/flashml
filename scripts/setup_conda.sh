@@ -10,7 +10,8 @@ SIMPLECLICK_GDRIVE_ID="${SIMPLECLICK_GDRIVE_ID:-1GXk6q5fwKo2twkY5ZZGjVKCgJv7XeLA
 
 export FLASHML_HOME CONDA_ROOT
 mkdir -p "${FLASHML_HOME}/third_party" "${FLASHML_HOME}/weights/simpleclick" \
-  "${FLASHML_HOME}/weights/oneformer" "${FLASHML_HOME}/weights/huggingface" \
+  "${FLASHML_HOME}/weights/oneformer" "${FLASHML_HOME}/weights/lama" \
+  "${FLASHML_HOME}/weights/huggingface" \
   "${FLASHML_HOME}/logs"
 
 if command -v apt-get >/dev/null 2>&1 && [ "$(id -u)" -eq 0 ]; then
@@ -48,6 +49,7 @@ create_env flashml-api "${FLASHML_HOME}/envs/environment-api.yml"
 create_env flashml-moge "${FLASHML_HOME}/envs/environment-moge.yml"
 create_env flashml-simpleclick "${FLASHML_HOME}/envs/environment-simpleclick.yml"
 create_env flashml-oneformer "${FLASHML_HOME}/envs/environment-oneformer.yml"
+create_env flashml-lama "${FLASHML_HOME}/envs/environment-lama.yml"
 
 conda run -n flashml-api python -m pip install --upgrade pip
 conda run -n flashml-api python -m pip install -e "${FLASHML_HOME}"
@@ -116,6 +118,31 @@ print("Downloading Ruicheng/moge-3-vitg")
 snapshot_download(repo_id="Ruicheng/moge-3-vitg", repo_type="model")
 print("MoGe weights ready")
 PY
+
+echo "Setting up LaMa (iopaint) environment..."
+conda run -n flashml-lama python -m pip install --upgrade pip
+conda run -n flashml-lama python -m pip install \
+  torch torchvision --index-url https://download.pytorch.org/whl/cu128
+conda run -n flashml-lama python -m pip install \
+  "iopaint>=1.2,<2" opencv-python-headless Pillow
+conda run -n flashml-lama python -m pip install -e "${FLASHML_HOME}"
+
+LAMA_MODEL_DIR="${FLASHML_HOME}/weights/lama"
+if [ ! -d "${LAMA_MODEL_DIR}" ] || [ -z "$(ls -A "${LAMA_MODEL_DIR}" 2>/dev/null)" ]; then
+  echo "Downloading LaMa big-lama weights into ${LAMA_MODEL_DIR}"
+  FLASHML_LAMA_MODEL_DIR="${LAMA_MODEL_DIR}" \
+    conda run -n flashml-lama python - <<'PY'
+import os
+from pathlib import Path
+from iopaint import LaMa
+
+model_dir = Path(os.environ["FLASHML_LAMA_MODEL_DIR"])
+model_dir.mkdir(parents=True, exist_ok=True)
+# Instantiating with a missing model_dir triggers the built-in weight download.
+LaMa(device="cpu", model_dir=str(model_dir))
+print(f"LaMa weights ready at {model_dir}")
+PY
+fi
 
 echo
 echo "Setup complete."
