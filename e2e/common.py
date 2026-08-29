@@ -128,3 +128,30 @@ def png_base64(png: bytes | None = None) -> str:
 def png_data_url(png: bytes | None = None) -> str:
     """Return the PNG as a ``data:image/png;base64,...`` URL."""
     return "data:image/png;base64," + png_base64(png)
+
+
+def decode_base64_image(raw: str) -> bytes:
+    """Decode raw base64 string or a data URL (e.g. data:image/png;base64,...)."""
+    if "," in raw and raw.startswith("data:"):
+        _, raw = raw.split(",", 1)
+    return base64.b64decode(raw)
+
+
+def resolve_out_path(
+    input_path: str | None,
+    default_name: str,
+    suffix: str,
+    out_arg: str | None = None,
+) -> Path:
+    """Determine output file path based on input path and custom suffix."""
+    if out_arg:
+        return Path(out_arg)
+    if input_path:
+        p = Path(input_path)
+        return p.parent / f"{p.stem}{suffix}"
+    return Path(default_name)
+
+
+def has_display() -> bool:
+    """Check if graphical display is available."""
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
