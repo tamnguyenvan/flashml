@@ -140,7 +140,7 @@ conda run --no-capture-output -n flashml-rorem python -m pip install --upgrade p
 conda run --no-capture-output -n flashml-rorem python -m pip install \
   torch torchvision --index-url https://download.pytorch.org/whl/cu128
 conda run --no-capture-output -n flashml-rorem python -m pip install \
-  diffusers transformers accelerate safetensors opencv-python-headless Pillow
+  diffusers transformers accelerate safetensors opencv-python-headless Pillow gdown xformers
 conda run --no-capture-output -n flashml-rorem python -m pip install -e "${FLASHML_HOME}"
 
 RORem_UNET_DIR="${FLASHML_HOME}/weights/rorem/unet"
