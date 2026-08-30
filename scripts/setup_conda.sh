@@ -140,17 +140,26 @@ conda run --no-capture-output -n flashml-rorem python -m pip install --upgrade p
 conda run --no-capture-output -n flashml-rorem python -m pip install \
   torch torchvision --index-url https://download.pytorch.org/whl/cu128
 conda run --no-capture-output -n flashml-rorem python -m pip install \
-  diffusers transformers accelerate safetensors opencv-python-headless Pillow gdown xformers
+  diffusers transformers accelerate safetensors opencv-python-headless Pillow huggingface_hub xformers
 conda run --no-capture-output -n flashml-rorem python -m pip install -e "${FLASHML_HOME}"
 
 RORem_UNET_DIR="${FLASHML_HOME}/weights/rorem/unet"
 mkdir -p "${RORem_UNET_DIR}"
 
-# Download RORem-mixed UNet from Google Drive (folder: 1G46Rs0-fZvoJ55OLQrC35dbRohFM917z)
+# Download RORem-mixed UNet from Hugging Face (repo: tamnvvn/RORem_mixed)
 # Contains config.json, *.safetensors, *.safetensors.index.json
 if [ -z "$(ls -A "${RORem_UNET_DIR}")" ]; then
-  echo "Downloading RORem-mixed UNet weights..."
-  conda run --no-capture-output -n flashml-rorem gdown --folder 1G46Rs0-fZvoJ55OLQrC35dbRohFM917z -O "${RORem_UNET_DIR}"
+  echo "Downloading RORem-mixed UNet weights from Hugging Face..."
+  HF_HOME="${FLASHML_HOME}/weights/huggingface" \
+    conda run --no-capture-output -n flashml-rorem python - <<'PY'
+from huggingface_hub import snapshot_download
+import os
+repo_id = "tamnvvn/RORem_mixed"
+local_dir = os.environ["FLASHML_HOME"] + "/weights/rorem/unet"
+print(f"Downloading {repo_id} -> {local_dir}")
+snapshot_download(repo_id=repo_id, local_dir=local_dir)
+print("RORem-mixed weights ready")
+PY
   echo "RORem-mixed weights ready at ${RORem_UNET_DIR}"
 else
   echo "RORem-mixed weights already exist at ${RORem_UNET_DIR}"
