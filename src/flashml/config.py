@@ -58,8 +58,14 @@ class Settings(BaseSettings):
     oneformer_model_id: str = "shi-labs/oneformer_ade20k_swin_large"
     oneformer_model_dir: Path = Path("/workspace/flashml/weights/oneformer")
 
-    lama_model_dir: Path = Path("/workspace/flashml/weights/lama")
-    lama_max_longest_size: int = 1024
+    rorem_model_dir: Path = Path("/workspace/flashml/weights/rorem")
+    rorem_base_model: str = "diffusers/stable-diffusion-xl-1.0-inpainting-0.1"
+    rorem_unet_path: Path = Path("/workspace/flashml/weights/rorem/unet")
+    rorem_lora_path: Path = Path("/workspace/flashml/weights/rorem/lora")
+    rorem_resolution: int = 512
+    rorem_dilate_size: int = 20
+    rorem_use_cfg: bool = True
+    rorem_max_longest_size: int = 1024
 
     request_id_header: str = "X-Request-ID"
 

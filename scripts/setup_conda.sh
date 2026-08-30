@@ -10,7 +10,8 @@ SIMPLECLICK_GDRIVE_ID="${SIMPLECLICK_GDRIVE_ID:-1GXk6q5fwKo2twkY5ZZGjVKCgJv7XeLA
 
 export FLASHML_HOME CONDA_ROOT
 mkdir -p "${FLASHML_HOME}/third_party" "${FLASHML_HOME}/weights/simpleclick" \
-  "${FLASHML_HOME}/weights/oneformer" "${FLASHML_HOME}/weights/lama" \
+  "${FLASHML_HOME}/weights/oneformer" "${FLASHML_HOME}/weights/rorem/unet" \
+  "${FLASHML_HOME}/weights/rorem/lora" \
   "${FLASHML_HOME}/weights/huggingface" \
   "${FLASHML_HOME}/logs"
 
@@ -60,7 +61,7 @@ create_env flashml-api "${FLASHML_HOME}/envs/environment-api.yml"
 create_env flashml-moge "${FLASHML_HOME}/envs/environment-moge.yml"
 create_env flashml-simpleclick "${FLASHML_HOME}/envs/environment-simpleclick.yml"
 create_env flashml-oneformer "${FLASHML_HOME}/envs/environment-oneformer.yml"
-create_env flashml-lama "${FLASHML_HOME}/envs/environment-lama.yml"
+create_env flashml-rorem "${FLASHML_HOME}/envs/environment-rorem.yml"
 
 conda run --no-capture-output -n flashml-api python -m pip install --upgrade pip
 conda run --no-capture-output -n flashml-api python -m pip install -e "${FLASHML_HOME}"
@@ -135,25 +136,23 @@ snapshot_download(repo_id="Ruicheng/moge-3-vitg", repo_type="model")
 print("MoGe weights ready")
 PY
 
-echo "Setting up LaMa (simple-lama-inpainting) environment..."
-conda run --no-capture-output -n flashml-lama python -m pip install --upgrade pip
-conda run --no-capture-output -n flashml-lama python -m pip install \
+echo "Setting up RORem-4S (diffusers + LCM) environment..."
+conda run --no-capture-output -n flashml-rorem python -m pip install --upgrade pip
+conda run --no-capture-output -n flashml-rorem python -m pip install \
   torch torchvision --index-url https://download.pytorch.org/whl/cu128
-conda run --no-capture-output -n flashml-lama python -m pip install \
-  simple-lama-inpainting opencv-python-headless Pillow
-conda run --no-capture-output -n flashml-lama python -m pip install -e "${FLASHML_HOME}"
+conda run --no-capture-output -n flashml-rorem python -m pip install \
+  diffusers transformers accelerate safetensors xformers opencv-python-headless Pillow
+conda run --no-capture-output -n flashml-rorem python -m pip install -e "${FLASHML_HOME}"
 
-LAMA_MODEL_DIR="${FLASHML_HOME}/weights/lama"
-LAMA_MODEL_FILE="${LAMA_MODEL_DIR}/big-lama.pt"
-if [ ! -f "${LAMA_MODEL_FILE}" ]; then
-  echo "Downloading LaMa big-lama weights into ${LAMA_MODEL_FILE}"
-  mkdir -p "${LAMA_MODEL_DIR}"
-  wget -q --show-progress -O "${LAMA_MODEL_FILE}" \
-    "https://github.com/enesmsahin/simple-lama-inpainting/releases/download/v0.1.0/big-lama.pt" || \
-  FLASHML_LAMA_MODEL_DIR="${LAMA_MODEL_DIR}" \
-    conda run --no-capture-output -n flashml-lama python -c "from torch.hub import download_url_to_file; download_url_to_file('https://github.com/enesmsahin/simple-lama-inpainting/releases/download/v0.1.0/big-lama.pt', '${LAMA_MODEL_FILE}')"
-  echo "LaMa weights ready at ${LAMA_MODEL_FILE}"
-fi
+RORem_UNET_DIR="${FLASHML_HOME}/weights/rorem/unet"
+RORem_LORA_DIR="${FLASHML_HOME}/weights/rorem/lora"
+mkdir -p "${RORem_UNET_DIR}" "${RORem_LORA_DIR}"
+
+echo "RORem-4S requires RORem UNet and LoRA weights."
+echo "Download them from: https://drive.google.com/drive/folders/1QK8qcqT7SKRzD2AyGtgfwWwlQrUesAc1"
+echo "Place UNet in: ${RORem_UNET_DIR}"
+echo "Place LoRA in: ${RORem_LORA_DIR}"
+echo "Then set FLASHML_ROREM_UNET_PATH and FLASHML_ROREM_LORA_PATH environment variables."
 
 echo
 echo "Setup complete."

@@ -22,7 +22,7 @@ def get_oneformer():
     return AppState.oneformer
 
 
-def get_lama():
-    if AppState.lama is None:
+def get_rorem():
+    if AppState.rorem is None:
         raise DependencyUnavailableError("remove service is not enabled")
-    return AppState.lama
+    return AppState.rorem

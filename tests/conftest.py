@@ -99,7 +99,7 @@ class FakeOneFormer:
         )
 
 
-class FakeLama:
+class FakeRORem:
     backend = "local"
 
     def preload(self) -> None:
@@ -109,7 +109,6 @@ class FakeLama:
         return ServiceStatus(enabled=True, backend="local", ready=True, detail="fake")
 
     def remove(self, image_bytes: bytes, mask_bytes: bytes, *, max_size: int) -> bytes:
-        # Return the input image untouched wrapped in a valid PNG container.
         return PNG_1X1
 
 
@@ -120,7 +119,7 @@ def client():
         AppState.moge = FakeMoge()
         AppState.simpleclick = FakeSimpleClick()
         AppState.oneformer = FakeOneFormer()
-        AppState.lama = FakeLama()
+        AppState.rorem = FakeRORem()
         yield test_client
 
 
@@ -131,5 +130,5 @@ def client_auth():
         AppState.moge = FakeMoge()
         AppState.simpleclick = FakeSimpleClick()
         AppState.oneformer = FakeOneFormer()
-        AppState.lama = FakeLama()
+        AppState.rorem = FakeRORem()
         yield test_client

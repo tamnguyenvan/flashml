@@ -1,7 +1,7 @@
-"""Client test for ``POST /remove`` (LaMa inpainting).
+"""Client test for ``POST /remove`` (RORem-4S inpainting).
 
 Allows user to interactively draw an inpainting mask with a brush on the image,
-sends the image and mask to the LaMa inpainting endpoint, saves the result,
+sends the image and mask to the RORem-4S inpainting endpoint, saves the result,
 and shows a side-by-side comparison.
 
 Usage:
@@ -85,7 +85,7 @@ def draw_mask_gui(image_bytes: bytes, initial_brush_radius: int = 15) -> bytes:
     last_point = None
     brush_radius = initial_brush_radius
 
-    window_name = "LaMa Remove: Left-Drag=Brush | [+/-]=Radius | [c]=Clear | [Enter]=Inpaint | [q]=Quit"
+    window_name = "RORem-4S Remove: Left-Drag=Brush | [+/-]=Radius | [c]=Clear | [Enter]=Inpaint | [q]=Quit"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(window_name, min(1200, w), min(900, h))
 
@@ -184,7 +184,7 @@ def show_comparison_gui(image_bytes: bytes, mask_bytes: bytes, inpainted_bytes: 
 
     # Combine side-by-side
     combined = np.hstack([orig_img, mask_view, result_img])
-    window_name = "LaMa Inpainting Result - Press any key to close"
+    window_name = "RORem-4S Inpainting Result - Press any key to close"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(window_name, min(1600, combined.shape[1]), min(600, combined.shape[0]))
     cv2.imshow(window_name, combined)

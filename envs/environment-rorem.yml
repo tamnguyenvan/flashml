@@ -1,6 +1,7 @@
-name: flashml-lama
+name: flashml-rorem
 channels:
   - conda-forge
 dependencies:
   - python=3.11
   - pip
+  - opencv

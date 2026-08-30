@@ -17,7 +17,7 @@ def _services() -> dict[str, ServiceStatus]:
         "reconstruct": AppState.moge,
         "interactive-segment": AppState.simpleclick,
         "segment": AppState.oneformer,
-        "remove": AppState.lama,
+        "remove": AppState.rorem,
     }
     for name, service in mapping.items():
         if not settings.is_enabled(name):  # type: ignore[arg-type]

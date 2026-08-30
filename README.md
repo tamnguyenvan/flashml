@@ -7,7 +7,7 @@ Unified FastAPI service for several inference stacks, without changing their alg
 | `POST /reconstruct` | MoGe-3 | multipart image (`file`) | ZIP (`point_map.npy`, `metadata.json`, optional `output.glb` / debug PNGs) |
 | `POST /interactive-segment` | SimpleClick | JSON image + clicks | PNG mask (base64) |
 | `POST /segment` | OneFormer ADE20K | JSON image | wall / floor / rug PNG masks |
-| `POST /remove` | LaMa | multipart image (`file`) + mask (`mask`) | inpainted PNG |
+| `POST /remove` | RORem-4S | multipart image (`file`) + mask (`mask`) | inpainted PNG |
 
 `POST /predict` is kept as an alias of `/reconstruct` for the existing DreamRoom MoGe client.
 
@@ -64,7 +64,7 @@ Install the package (editable) with its dev dependencies:
 python -m pip install -e ".[dev]"
 ```
 
-For on-instance GPU deployments, `scripts/setup_conda.sh` installs Miniconda if needed, creates five environments (`flashml-api`, `flashml-moge`, `flashml-simpleclick`, `flashml-oneformer`, `flashml-lama`), clones MoGe / SimpleClick, and downloads model weights. The first run is long. See [Deploying on Vast.ai](#deploying-on-vast-ai).
+For on-instance GPU deployments, `scripts/setup_conda.sh` installs Miniconda if needed, creates five environments (`flashml-api`, `flashml-moge`, `flashml-simpleclick`, `flashml-oneformer`, `flashml-rorem`), clones MoGe / SimpleClick, and downloads model weights. The first run is long. See [Deploying on Vast.ai](#deploying-on-vast-ai).
 
 ## Usage
 
@@ -188,7 +188,7 @@ Open port **8000** on the Vast.ai instance. Workers bind to `127.0.0.1` only.
 
 ### GPU / memory notes
 
-VRAM: all checkpoints loaded at once wants a large GPU (MoGe-3 ViT-G + SimpleClick ViT-H + OneFormer Swin-L + LaMa). If you OOM, stop unused Supervisor programs, for example:
+VRAM: all checkpoints loaded at once wants a large GPU (MoGe-3 ViT-G + SimpleClick ViT-H + OneFormer Swin-L + RORem-4S). If you OOM, stop unused Supervisor programs, for example:
 
 ```bash
 supervisorctl -c "$FLASHML_HOME/conf/supervisord.conf" stop flashml-oneformer

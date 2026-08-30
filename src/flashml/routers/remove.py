@@ -6,10 +6,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import Response
 
-from flashml.deps import get_lama
+from flashml.deps import get_rorem
 from flashml.errors import PayloadTooLargeError
 from flashml.schemas import ErrorResponse
-from flashml.services.lama import RemoteLamaService
+from flashml.services.rorem import RemoteRORemService
 from flashml.state import AppState
 
 router = APIRouter(tags=["remove"])
@@ -24,13 +24,13 @@ router = APIRouter(tags=["remove"])
         500: {"model": ErrorResponse},
         503: {"model": ErrorResponse},
     },
-    summary="Remove objects from an image by inpainting with LaMa",
+    summary="Remove objects from an image by inpainting with RORem-4S",
 )
 async def remove(
     file: Annotated[UploadFile, File(description="RGB image (PNG or JPEG)")],
     mask: Annotated[UploadFile, File(description="Binary mask PNG (white = region to remove)")],
     max_size: Annotated[int, Form(ge=64, le=4096)] = 1024,
-    service=Depends(get_lama),
+    service=Depends(get_rorem),
 ) -> Response:
     settings = AppState.settings
     image_raw = await file.read(settings.max_upload_bytes + 1)
@@ -40,7 +40,7 @@ async def remove(
     if len(mask_raw) > settings.max_upload_bytes:
         raise PayloadTooLargeError(settings.max_upload_bytes)
 
-    if isinstance(service, RemoteLamaService):
+    if isinstance(service, RemoteRORemService):
         content = await service.remove_remote(
             image_raw,
             mask_raw,

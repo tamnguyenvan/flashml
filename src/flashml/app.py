@@ -13,7 +13,7 @@ from flashml.errors import register_exception_handlers
 from flashml.logging import setup_logging
 from flashml.middleware import APIKeyMiddleware, RequestContextMiddleware
 from flashml.routers import health, interactive_segment, reconstruct, remove, segment
-from flashml.services.lama import build_lama_service
+from flashml.services.rorem import build_rorem_service
 from flashml.services.moge import build_moge_service
 from flashml.services.oneformer import build_oneformer_service
 from flashml.services.simpleclick import build_simpleclick_service
@@ -40,9 +40,9 @@ def _load_enabled_services(settings: Settings) -> None:
             AppState.oneformer.preload()
     if settings.is_enabled("remove"):
         logger.info("Initializing remove backend")
-        AppState.lama = build_lama_service(settings)
+        AppState.rorem = build_rorem_service(settings)
         if settings.preload and settings.remove_url is None:
-            AppState.lama.preload()
+            AppState.rorem.preload()
 
 
 @asynccontextmanager
