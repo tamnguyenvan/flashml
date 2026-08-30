@@ -24,6 +24,8 @@ from flashml.services.proxy import InferenceProxy
 
 logger = logging.getLogger(__name__)
 
+_LORA_NAME = "object_remove"
+
 
 def _decode_rgb(image_bytes: bytes):
     try:
@@ -152,10 +154,50 @@ class FluxService:
         pipe.text_encoder = text_encoder
         pipe.tokenizer = tokenizer
         pipe.to(self.device)
+        self._load_lora(pipe)
 
         self.pipe = pipe
         self._ready = True
         logger.info("FLUX.2-klein-4B ready on %s", self.device)
+
+    def _load_lora(self, pipe) -> None:
+        """Attach the object-removal LoRA to the quantised transformer.
+
+        Applied at the transformer rather than through pipe.load_lora_weights:
+        every key in this checkpoint converts to a transformer.* target, so
+        there is no text-encoder half to route.
+
+        Loading onto int8 weights needs no special handling - quanto's QLinear
+        subclasses nn.Linear, so peft wraps the quantised layers directly and
+        both the adapter load and the fuse work as they would on bf16.
+        """
+
+        lora_path = self.settings.flux_lora_path
+        if not lora_path:
+            logger.info("No LoRA configured - running the base model")
+            return
+        if not Path(lora_path).is_file():
+            raise InferenceError(f"object-removal LoRA not found at {lora_path}")
+
+        from diffusers import Flux2KleinPipeline
+
+        state_dict = Flux2KleinPipeline.lora_state_dict(str(lora_path))
+        if isinstance(state_dict, tuple):
+            state_dict = state_dict[0]
+
+        pipe.transformer.load_lora_adapter(state_dict, adapter_name=_LORA_NAME)
+        if self.settings.flux_lora_fuse:
+            # Only meaningful on an unquantised build. On the int8 weights this
+            # is a silent no-op: it returns cleanly, changes nothing, and the
+            # model then behaves as if no LoRA were loaded.
+            logger.warning("fusing the LoRA has no effect on quantised weights")
+            pipe.transformer.fuse_lora(adapter_names=[_LORA_NAME])
+        logger.info(
+            "object-removal LoRA loaded from %s (%d tensors, fused=%s)",
+            lora_path,
+            len(state_dict),
+            self.settings.flux_lora_fuse,
+        )
 
     def _infer_locked(self, conditioning):
         try:

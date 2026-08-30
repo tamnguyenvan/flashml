@@ -165,6 +165,40 @@ else
   echo "FLUX weights already exist at ${FLASHML_HOME}/weights/flux"
 fi
 
+# Download the object-removal LoRA.
+#
+# Take the file by name, NOT a snapshot_download of the whole repo. fal ships
+# two LoRA files and the plainly-named flux-object-remove-lora.safetensors is
+# TRUNCATED - its header declares 76,021,760 bytes of tensor data but the file
+# carries only 58,424,416, so safetensors refuses to open it with
+# "incomplete metadata, file not fully covered". The comfy_converted file below
+# is the complete one. (xocialize/object-remove-FLUX.2-klein-4B-lora mirrors the
+# broken file byte for byte - same sha256 - so it is no help either.)
+FLUX_LORA="${FLASHML_HOME}/weights/flux/flux-object-remove-lora-fal.safetensors"
+if [ ! -f "${FLUX_LORA}" ]; then
+  echo "Downloading the object-removal LoRA..."
+  HF_HOME="${FLASHML_HOME}/weights/huggingface"     conda run --no-capture-output -n flashml-flux python - <<'PY'
+import os, shutil
+from huggingface_hub import hf_hub_download
+from safetensors.torch import load_file
+
+REPO = "fal/flux-2-klein-4B-object-remove-lora"
+NAME = "kDEkt5q7tDLKOpQJIVMPx_pytorch_lora_weights_comfy_converted.safetensors"
+dest = os.environ["FLASHML_HOME"] + "/weights/flux/flux-object-remove-lora-fal.safetensors"
+
+path = hf_hub_download(repo_id=REPO, filename=NAME)
+# Fail loudly here rather than at service start: a short file only surfaces as
+# an unhelpful OSError deep inside diffusers' loader.
+sd = load_file(path)
+if len(sd) != 136:
+    raise SystemExit(f"LoRA looks wrong: expected 136 tensors, got {len(sd)}")
+shutil.copyfile(path, dest)
+print(f"object-removal LoRA ready ({len(sd)} tensors) -> {dest}")
+PY
+else
+  echo "Object-removal LoRA already exists at ${FLUX_LORA}"
+fi
+
 echo
 echo "Setup complete."
 echo "  FLASHML_HOME=${FLASHML_HOME}"

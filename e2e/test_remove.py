@@ -1,11 +1,36 @@
 """Client test for ``POST /remove`` (FLUX.2 klein object removal).
 
-Pipeline: Show original -> user draws mask -> red semi-transparent mask overlay
--> call API -> show result
+Pipeline: Show original -> user draws mask -> highlight the object -> call API
+-> show result -> check something was actually removed.
 
-The mask is drawn onto the image as a red semi-transparent overlay (the object
-to remove is highlighted). That masked image is the conditioning image sent to
-the model; the mask itself is not sent (the server trusts the client's image).
+The highlight is burned into the image; the mask itself is not sent (the server
+trusts the client's image). Two highlight styles, --highlight:
+
+  solid    fill the masked region with FULLY OPAQUE red (default)
+  tint     fill it with semi-transparent red (--mask-alpha)
+  outline  draw a red rectangle around it
+
+Use solid. This was measured on a bedroom photo, removing the bed:
+
+  solid    object removed cleanly, floor and wall filled - 4 seeds, all good
+  tint 0.5 object REPAINTED RED and left in place
+  outline  annotation removed, object untouched (4, 20 and 28 steps alike)
+
+The alpha is what decides it. At 0.5 the object's own texture shows through the
+red, so the model reads a red-painted object and reproduces one. At 1.0 there is
+no texture left - just a flat silhouette - and it reads as a marker. An outline
+is too weak a signal for anything furniture-sized.
+
+Steps: 4 is enough and is also better here. At 20 the model started inventing
+replacement furniture in the cleared space rather than leaving it empty.
+
+The removal check matters more than it looks. A response can be a perfectly
+valid PNG, arrive in good time, and still contain the object: with
+flux_lora_fuse=True the adapter silently does nothing on int8 weights, and the
+model then just tidies away the red highlight and returns the scene untouched.
+Comparing the result against the ORIGINAL inside the highlighted region is what
+separates that from a real removal - comparing against the conditioning image
+would not, because the highlight always disappears either way.
 
 Usage:
 
@@ -55,6 +80,52 @@ def _apply_mask_tint(image, mask, alpha: float = 0.5, color=MASK_COLOR):
         image[mask_bool].astype(np.float32) * (1.0 - alpha) + color_arr * alpha
     ).astype(np.uint8)
     return tinted
+
+
+def _apply_mask_outline(image, mask, color=MASK_COLOR, thickness: int = 6):
+    """Return a copy of ``image`` with a red rectangle drawn around the mask."""
+    import cv2
+    import numpy as np
+
+    out = image.copy()
+    ys, xs = np.nonzero(mask > 0)
+    if len(xs) == 0:
+        return out
+    pad = thickness
+    x0, x1 = max(0, int(xs.min()) - pad), min(out.shape[1] - 1, int(xs.max()) + pad)
+    y0, y1 = max(0, int(ys.min()) - pad), min(out.shape[0] - 1, int(ys.max()) + pad)
+    cv2.rectangle(out, (x0, y0), (x1, y1), color, thickness)
+    return out
+
+
+def verify_removal(original_bytes: bytes, result_bytes: bytes, mask_bytes: bytes):
+    """How much the highlighted region changed, 0-255 mean absolute difference.
+
+    Measured against the ORIGINAL rather than the conditioning image on purpose
+    - see the module docstring. Returns None when OpenCV is unavailable.
+    """
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        return None
+
+    orig = cv2.imdecode(np.frombuffer(original_bytes, np.uint8), cv2.IMREAD_COLOR)
+    res = cv2.imdecode(np.frombuffer(result_bytes, np.uint8), cv2.IMREAD_COLOR)
+    mask = cv2.imdecode(np.frombuffer(mask_bytes, np.uint8), cv2.IMREAD_GRAYSCALE)
+    if orig is None or res is None or mask is None:
+        return None
+
+    h, w = orig.shape[:2]
+    if res.shape[:2] != (h, w):
+        res = cv2.resize(res, (w, h), interpolation=cv2.INTER_LANCZOS4)
+    if mask.shape[:2] != (h, w):
+        mask = cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
+
+    sel = mask > 127
+    if not sel.any():
+        return None
+    return float(np.abs(res[sel].astype(np.float32) - orig[sel].astype(np.float32)).mean())
 
 
 def run_remove(
@@ -158,7 +229,9 @@ def draw_mask_gui(image_bytes: bytes, initial_brush_radius: int = 15) -> bytes:
     return buf.tobytes() if ok else b""
 
 
-def prepare_outline(image_bytes: bytes, mask_bytes: bytes, alpha: float) -> tuple[bytes, bytes | None]:
+def prepare_conditioning(
+    image_bytes: bytes, mask_bytes: bytes, alpha: float, style: str = "tint"
+) -> tuple[bytes, bytes | None]:
     """Build (conditioning_image, masked_preview_png) from a mask drawn over the image.
 
     conditioning_image: the source image with the masked region tinted as a red
@@ -186,7 +259,12 @@ def prepare_outline(image_bytes: bytes, mask_bytes: bytes, alpha: float) -> tupl
         mask_arr = cv2.resize(mask_arr, (image_arr.shape[1], image_arr.shape[0]), interpolation=cv2.INTER_NEAREST)
 
     mask_bin = (mask_arr > 127).astype(np.uint8) * 255
-    conditioning = _apply_mask_tint(image_arr, mask_bin, alpha=alpha)
+    if style == "outline":
+        conditioning = _apply_mask_outline(image_arr, mask_bin)
+    elif style == "solid":
+        conditioning = _apply_mask_tint(image_arr, mask_bin, alpha=1.0)
+    else:
+        conditioning = _apply_mask_tint(image_arr, mask_bin, alpha=alpha)
 
     ok1, conditioning_bytes = cv2.imencode(".png", conditioning)
     if not ok1:
@@ -256,6 +334,23 @@ def main() -> int:
     )
     parser.add_argument("--out", default=None, help="Path to save the inpainted result PNG (default: <image_stem>_inpainted.png)")
     parser.add_argument("--no-gui", action="store_true", help="Disable interactive GUI even if display is available")
+    parser.add_argument(
+        "--highlight",
+        choices=("solid", "tint", "outline"),
+        default="solid",
+        help="How to mark the object (default: solid - see the module docstring)",
+    )
+    parser.add_argument(
+        "--min-change",
+        type=float,
+        default=8.0,
+        help="Warn if the highlighted region changed less than this (0-255 mean abs diff, default: 8)",
+    )
+    parser.add_argument(
+        "--fail-if-unchanged",
+        action="store_true",
+        help="Exit non-zero when the region changed less than --min-change (for CI)",
+    )
     args = parser.parse_args()
 
     if args.image:
@@ -287,7 +382,9 @@ def main() -> int:
         mask_bytes = make_mask_png(512, 512)
 
     # mask -> red semi-transparent overlay -> call API -> result
-    conditioning_bytes, preview_bytes = prepare_outline(image_bytes, mask_bytes, args.mask_alpha)
+    conditioning_bytes, preview_bytes = prepare_conditioning(
+        image_bytes, mask_bytes, args.mask_alpha, style=args.highlight
+    )
 
     out_path = resolve_out_path(args.image, "output_inpainted.png", "_inpainted.png", args.out)
 
@@ -314,6 +411,30 @@ def main() -> int:
             if not drawn_mask_path.exists():
                 drawn_mask_path.write_bytes(mask_bytes)
                 print(f"  saved mask  : {drawn_mask_path}")
+
+            change = verify_removal(image_bytes, result_bytes, mask_bytes)
+            if change is None:
+                print("  removal check: skipped (needs opencv-python)")
+            else:
+                print(f"  highlighted region changed by {change:.1f} (0-255)")
+                if change < args.min_change:
+                    print(
+                        "  WARNING: the region barely changed - the object is probably"
+                        " still there. Check flux_lora_fuse is False (fusing is a"
+                        " silent no-op on int8 weights) and use --highlight solid.",
+                        file=sys.stderr,
+                    )
+                elif args.highlight == "tint":
+                    # A big number is not proof of success: repainting the object
+                    # red scores higher than removing it. Only solid is trusted.
+                    print(
+                        "  NOTE: --highlight tint often repaints the object instead"
+                        " of removing it, and still scores a large change. Compare"
+                        " against --highlight solid before believing this number.",
+                        file=sys.stderr,
+                    )
+                    if args.fail_if_unchanged:
+                        return 3
 
             if not args.no_gui and has_display():
                 show_result_gui(image_bytes, mask_bytes, result_bytes, alpha=args.mask_alpha)

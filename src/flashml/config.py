@@ -61,7 +61,23 @@ class Settings(BaseSettings):
     flux_model_dir: Path = Path("/workspace/flashml/weights/flux")
     flux_base_model: str = "black-forest-labs/FLUX.2-klein-4B"
     flux_quant_repo: str = "aydin99/FLUX.2-klein-4B-int8"
-    flux_prompt: str = "Remove the object marked by the red highlight from the scene, seamlessly filling the area with the surrounding background"
+    # The LoRA's trained trigger phrase, taken verbatim from the model card.
+    # A LoRA responds to the wording it was trained on, so paraphrasing this
+    # weakens the effect even when the paraphrase reads better.
+    flux_prompt: str = "Remove the highlighted object from the scene"
+    # fal publishes TWO LoRA files in the same repo. The plainly-named
+    # flux-object-remove-lora.safetensors is truncated - its header declares
+    # 76,021,760 bytes but the file carries only 58,424,416, so safetensors
+    # refuses to open it. This is the complete one.
+    flux_lora_path: Path | None = Path(
+        "/workspace/flashml/weights/flux/flux-object-remove-lora-fal.safetensors"
+    )
+    # MUST stay False on the int8 build. fuse_lora() reports success on quanto
+    # weights and changes nothing - measured: max weight delta exactly 0 - so a
+    # fused run silently behaves like the base model. It erased the red
+    # annotation and left the object sitting there. Unfused, the adapter runs as
+    # a parallel branch and removal works.
+    flux_lora_fuse: bool = False
     flux_num_inference_steps: int = 4
     flux_guidance: float = 0.0
     flux_max_longest_size: int = 1024
