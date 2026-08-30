@@ -61,10 +61,10 @@ class Settings(BaseSettings):
     rorem_model_dir: Path = Path("/workspace/flashml/weights/rorem")
     rorem_base_model: str = "diffusers/stable-diffusion-xl-1.0-inpainting-0.1"
     rorem_unet_path: Path = Path("/workspace/flashml/weights/rorem/unet")
-    rorem_lora_path: Path = Path("/workspace/flashml/weights/rorem/lora")
-    rorem_resolution: int = 512
+    rorem_resolution: int = 1024
     rorem_dilate_size: int = 20
     rorem_use_cfg: bool = True
+    rorem_num_inference_steps: int = 30
     rorem_max_longest_size: int = 1024
 
     request_id_header: str = "X-Request-ID"

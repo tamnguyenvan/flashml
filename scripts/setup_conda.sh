@@ -11,7 +11,6 @@ SIMPLECLICK_GDRIVE_ID="${SIMPLECLICK_GDRIVE_ID:-1GXk6q5fwKo2twkY5ZZGjVKCgJv7XeLA
 export FLASHML_HOME CONDA_ROOT
 mkdir -p "${FLASHML_HOME}/third_party" "${FLASHML_HOME}/weights/simpleclick" \
   "${FLASHML_HOME}/weights/oneformer" "${FLASHML_HOME}/weights/rorem/unet" \
-  "${FLASHML_HOME}/weights/rorem/lora" \
   "${FLASHML_HOME}/weights/huggingface" \
   "${FLASHML_HOME}/logs"
 
@@ -136,23 +135,26 @@ snapshot_download(repo_id="Ruicheng/moge-3-vitg", repo_type="model")
 print("MoGe weights ready")
 PY
 
-echo "Setting up RORem-4S (diffusers + LCM) environment..."
+echo "Setting up RORem-mixed (diffusers) environment..."
 conda run --no-capture-output -n flashml-rorem python -m pip install --upgrade pip
 conda run --no-capture-output -n flashml-rorem python -m pip install \
   torch torchvision --index-url https://download.pytorch.org/whl/cu128
 conda run --no-capture-output -n flashml-rorem python -m pip install \
-  diffusers transformers accelerate safetensors xformers opencv-python-headless Pillow
+  diffusers transformers accelerate safetensors opencv-python-headless Pillow
 conda run --no-capture-output -n flashml-rorem python -m pip install -e "${FLASHML_HOME}"
 
 RORem_UNET_DIR="${FLASHML_HOME}/weights/rorem/unet"
-RORem_LORA_DIR="${FLASHML_HOME}/weights/rorem/lora"
-mkdir -p "${RORem_UNET_DIR}" "${RORem_LORA_DIR}"
+mkdir -p "${RORem_UNET_DIR}"
 
-echo "RORem-4S requires RORem UNet and LoRA weights."
-echo "Download them from: https://drive.google.com/drive/folders/1QK8qcqT7SKRzD2AyGtgfwWwlQrUesAc1"
-echo "Place UNet in: ${RORem_UNET_DIR}"
-echo "Place LoRA in: ${RORem_LORA_DIR}"
-echo "Then set FLASHML_ROREM_UNET_PATH and FLASHML_ROREM_LORA_PATH environment variables."
+# Download RORem-mixed UNet from Google Drive (folder: 1G46Rs0-fZvoJ55OLQrC35dbRohFM917z)
+# Contains config.json, *.safetensors, *.safetensors.index.json
+if [ -z "$(ls -A "${RORem_UNET_DIR}")" ]; then
+  echo "Downloading RORem-mixed UNet weights..."
+  conda run --no-capture-output -n flashml-rorem gdown --folder 1G46Rs0-fZvoJ55OLQrC35dbRohFM917z -O "${RORem_UNET_DIR}"
+  echo "RORem-mixed weights ready at ${RORem_UNET_DIR}"
+else
+  echo "RORem-mixed weights already exist at ${RORem_UNET_DIR}"
+fi
 
 echo
 echo "Setup complete."

@@ -1,6 +1,7 @@
-"""RORem-4S inpainting backend for object removal (``POST /remove``).
+"""RORem-mixed inpainting backend for object removal (``POST /remove``).
 
-Uses diffusers with SDXL-inpainting base + RORem UNet + LCM LoRA for 4-step inference.
+Uses diffusers with SDXL-inpainting base + RORem-mixed UNet for high-quality inference.
+RORem-mixed is trained on mixed resolution (512x512 and 1024x1024) for superior quality.
 """
 
 from __future__ import annotations
@@ -116,17 +117,16 @@ class RORemService:
 
     def _load_locked(self) -> None:
         import torch
-        from diffusers import AutoPipelineForInpainting, LCMScheduler, UNet2DConditionModel
+        from diffusers import AutoPipelineForInpainting, UNet2DConditionModel
 
         if self.settings.require_cuda and not torch.cuda.is_available():
-            raise InferenceError("CUDA is required for RORem-4S but is not available")
+            raise InferenceError("CUDA is required for RORem-mixed but is not available")
 
         self.device = torch.device(self.settings.device if torch.cuda.is_available() else "cpu")
-        logger.info("Loading RORem-4S on %s", self.device)
+        logger.info("Loading RORem-mixed on %s", self.device)
 
         base_model = self.settings.rorem_base_model
         unet_path = self.settings.rorem_unet_path
-        lora_path = self.settings.rorem_lora_path
 
         pipe = AutoPipelineForInpainting.from_pretrained(
             base_model,
@@ -135,25 +135,16 @@ class RORemService:
         )
 
         if unet_path and Path(unet_path).exists():
-            logger.info("Loading RORem UNet from %s", unet_path)
+            logger.info("Loading RORem-mixed UNet from %s", unet_path)
             unet = UNet2DConditionModel.from_pretrained(unet_path).to(self.device, dtype=torch.float16)
             pipe.unet = unet
         else:
             logger.warning("RORem UNet path not found: %s, using base model UNet", unet_path)
 
-        pipe.scheduler = LCMScheduler.from_config(pipe.scheduler.config)
-
-        if lora_path and Path(lora_path).exists():
-            logger.info("Loading RORem LoRA from %s", lora_path)
-            pipe.load_lora_weights(lora_path)
-            pipe.fuse_lora()
-        else:
-            logger.warning("RORem LoRA path not found: %s, running without LoRA", lora_path)
-
         pipe.to(self.device)
         self.pipe = pipe
         self._ready = True
-        logger.info("RORem-4S ready on %s", self.device)
+        logger.info("RORem-mixed ready on %s", self.device)
 
     def _infer_locked(self, image, mask):
         try:
@@ -170,7 +161,7 @@ class RORemService:
                     image=image_resized,
                     mask_image=mask_resized,
                     guidance_scale=1.0,
-                    num_inference_steps=4,
+                    num_inference_steps=self.settings.rorem_num_inference_steps,
                     strength=0.99,
                 ).images[0]
             else:
@@ -184,14 +175,14 @@ class RORemService:
                     image=image_resized,
                     mask_image=mask_resized,
                     guidance_scale=1.0,
-                    num_inference_steps=4,
+                    num_inference_steps=self.settings.rorem_num_inference_steps,
                     strength=0.99,
                 ).images[0]
 
             return result
         except Exception as exc:
-            logger.exception("RORem-4S inference failed")
-            raise InferenceError("RORem-4S inference failed") from exc
+            logger.exception("RORem-mixed inference failed")
+            raise InferenceError("RORem-mixed inference failed") from exc
 
 
 class RemoteRORemService:
@@ -202,7 +193,7 @@ class RemoteRORemService:
         self._proxy = InferenceProxy(
             settings.remove_url or "",
             timeout_s=settings.inference_timeout_s,
-            name="RORem-4S",
+            name="RORem-mixed",
         )
         self._ready = True
 
