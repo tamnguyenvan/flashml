@@ -55,8 +55,9 @@ fi
 
 if [ "$DAEMON" -eq 1 ]; then
   export SUPERVISOR_NODAEMON="false"
+  # nodaemon=false in the config makes supervisord daemonize itself.
   echo "Starting supervisord in the background (daemon). Logs: ${FLASHML_HOME}/logs/"
-  exec supervisord -c "${FLASHML_HOME}/conf/supervisord.conf" -d
+  exec supervisord -c "${FLASHML_HOME}/conf/supervisord.conf"
 else
   export SUPERVISOR_NODAEMON="true"
   echo "Starting supervisord in the foreground. Use --daemon to run it in the background."
