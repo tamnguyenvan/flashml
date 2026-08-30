@@ -68,12 +68,23 @@ def save_and_visualize_masks(
     # 1. Save individual category mask files
     saved_masks: list[Path] = []
     decoded_masks: dict[str, bytes] = {}
-    for label, mask_b64 in masks_dict.items():
+    for label, mask_items in masks_dict.items():
+        if not mask_items:
+            print(f"  no mask     : {label}")
+            continue
+
+        # The API returns a list of mask objects per category.
+        # For wall/floor/rug we expect at most one mask.
+        mask_item = mask_items[0]
+        mask_b64 = mask_item["mask"]
+
         mask_bytes = decode_base64_image(mask_b64)
         decoded_masks[label] = mask_bytes
+
         mask_file = out_dir / f"{stem}_segment_{label}.png"
         mask_file.write_bytes(mask_bytes)
         saved_masks.append(mask_file)
+
         print(f"  saved mask  : {mask_file.name} ({len(mask_bytes)} bytes)")
 
     # 2. Build composite color overlay if cv2 is available
