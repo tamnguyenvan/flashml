@@ -6,13 +6,15 @@ from PIL import Image
 
 from flashml.config import Settings
 from flashml.errors import InvalidImageError
-from flashml.services.rorem import (
-    RORemService,
-    RemoteRORemService,
+from flashml.services.flux import (
+    FluxService,
+    RemoteFluxService,
     _decode_mask,
     _decode_rgb,
     _dilate_mask,
+    _highlight_mask,
     _pil_to_png,
+    _round_dims,
 )
 from tests.conftest import PNG_1X1
 
@@ -51,7 +53,6 @@ def test_decode_mask_invalid():
 
 def test_dilate_mask_no_dilation():
     mask = Image.new("L", (10, 10), color=0)
-    # Draw a white square in the middle
     for x in range(4, 6):
         for y in range(4, 6):
             mask.putpixel((x, y), 255)
@@ -70,10 +71,22 @@ def test_dilate_mask_with_dilation():
     result = _dilate_mask(mask, 3)
     assert result.size == (10, 10)
     assert result.mode == "L"
-    # After dilation, more pixels should be white
-    white_pixels_original = sum(1 for x in range(10) for y in range(10) if mask.getpixel((x, y)) > 128)
-    white_pixels_dilated = sum(1 for x in range(10) for y in range(10) if result.getpixel((x, y)) > 128)
-    assert white_pixels_dilated >= white_pixels_original
+    white_original = sum(1 for x in range(10) for y in range(10) if mask.getpixel((x, y)) > 128)
+    white_dilated = sum(1 for x in range(10) for y in range(10) if result.getpixel((x, y)) > 128)
+    assert white_dilated >= white_original
+
+
+def test_highlight_mask_tints_region():
+    image = Image.new("RGB", (10, 10), color=(255, 255, 255))
+    mask = Image.new("L", (10, 10), color=0)
+    for x in range(4, 6):
+        for y in range(4, 6):
+            mask.putpixel((x, y), 255)
+
+    result = _highlight_mask(image, mask, alpha=1.0)
+    # Within the mask region the result should be tinted red, outside unchanged.
+    assert result.getpixel((5, 5)) == (255, 0, 0)
+    assert result.getpixel((0, 0)) == (255, 255, 255)
 
 
 def test_pil_to_png():
@@ -81,29 +94,20 @@ def test_pil_to_png():
     png_bytes = _pil_to_png(img)
     assert isinstance(png_bytes, bytes)
     assert len(png_bytes) > 0
-    # Verify it's a valid PNG
     loaded = Image.open(io.BytesIO(png_bytes))
     assert loaded.size == (10, 10)
     assert loaded.mode == "RGB"
 
 
-def test_rorem_service_remove_resizing_and_crop():
+def test_flux_service_remove_resizing_and_crop():
     settings = Settings(_env_file=None, require_cuda=False)
-    service = RORemService(settings)
+    service = FluxService(settings)
     service._ready = True
 
-    def mock_infer(image, mask):
-        assert image.size == mask.size
+    def mock_infer_locked(image, highlighted):
+        assert image.size == highlighted.size
         return Image.new("RGB", (image.width, image.height), color="red")
 
-    service.pipe = MagicMock()
-    service.pipe.return_value = MagicMock()
-    service.pipe.__call__ = MagicMock(return_value=MagicMock(images=[Image.new("RGB", (512, 512), color="red")]))
-
-    # Mock the actual inference path
-    original_infer = service._infer_locked
-    def mock_infer_locked(image, mask):
-        return Image.new("RGB", (image.width, image.height), color="red")
     service._infer_locked = mock_infer_locked
 
     img_bytes = _create_test_png(50, 50, "RGB")
@@ -111,18 +115,17 @@ def test_rorem_service_remove_resizing_and_crop():
 
     result_bytes = service.remove(img_bytes, mask_bytes, max_size=100)
     result_img = Image.open(io.BytesIO(result_bytes))
-
     assert result_img.size == (50, 50)
 
 
-def test_rorem_service_remove_downscales_large_image():
+def test_flux_service_remove_downscales_large_image():
     settings = Settings(_env_file=None, require_cuda=False)
-    service = RORemService(settings)
+    service = FluxService(settings)
     service._ready = True
 
-    def mock_infer_locked(image, mask):
+    def mock_infer_locked(image, highlighted):
         assert image.size == (100, 50)
-        assert mask.size == (100, 50)
+        assert highlighted.size == (100, 50)
         return Image.new("RGB", (100, 50), color="green")
 
     service._infer_locked = mock_infer_locked
@@ -135,9 +138,15 @@ def test_rorem_service_remove_downscales_large_image():
     assert result_img.size == (100, 50)
 
 
-def test_remote_rorem_service():
+def test_round_dims_rounds_up_to_multiple():
+    assert _round_dims(500, 300, 32) == (512, 320)
+    assert _round_dims(1024, 1024, 32) == (1024, 1024)
+    assert _round_dims(1, 1, 32) == (32, 32)
+
+
+def test_remote_flux_service():
     settings = Settings(_env_file=None, remove_url="http://remote:8000")
-    service = RemoteRORemService(settings)
+    service = RemoteFluxService(settings)
     assert service.backend == "http"
     assert service._ready is True
     status = service.status()

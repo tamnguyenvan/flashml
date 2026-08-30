@@ -99,7 +99,7 @@ class FakeOneFormer:
         )
 
 
-class FakeRORem:
+class FakeFlux:
     backend = "local"
 
     def preload(self) -> None:
@@ -119,7 +119,7 @@ def client():
         AppState.moge = FakeMoge()
         AppState.simpleclick = FakeSimpleClick()
         AppState.oneformer = FakeOneFormer()
-        AppState.rorem = FakeRORem()
+        AppState.flux = FakeFlux()
         yield test_client
 
 
@@ -130,5 +130,5 @@ def client_auth():
         AppState.moge = FakeMoge()
         AppState.simpleclick = FakeSimpleClick()
         AppState.oneformer = FakeOneFormer()
-        AppState.rorem = FakeRORem()
+        AppState.flux = FakeFlux()
         yield test_client

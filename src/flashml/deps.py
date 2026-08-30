@@ -22,7 +22,7 @@ def get_oneformer():
     return AppState.oneformer
 
 
-def get_rorem():
-    if AppState.rorem is None:
+def get_flux():
+    if AppState.flux is None:
         raise DependencyUnavailableError("remove service is not enabled")
-    return AppState.rorem
+    return AppState.flux

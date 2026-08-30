@@ -76,21 +76,21 @@ stderr_logfile=%(ENV_FLASHML_HOME)s/logs/oneformer.err.log
 environment=FLASHML_ENABLED_ROUTES="segment",FLASHML_PRELOAD="true",FLASHML_REQUIRE_CUDA="true",FLASHML_PORT="8003",PYTHONPATH="%(ENV_FLASHML_HOME)s/src"
 
 ; -----------------------------------------------------------------------------
-; GPU Worker: RORem-4S (object removal / inpainting)
+; GPU Worker: FLUX.2 klein (object removal / inpainting)
 ; -----------------------------------------------------------------------------
-[program:flashml-rorem]
-command=%(ENV_CONDA_ROOT)s/flashml-rorem/bin/uvicorn flashml.app:app --host 127.0.0.1 --port 8004 --workers 1 --timeout-keep-alive 75
-directory=%(ENV_FLASHML_HOME)s
-autostart=true
-autorestart=true
-priority=10
-startsecs=20
-startretries=40
-stopasgroup=true
-killasgroup=true
-stdout_logfile=%(ENV_FLASHML_HOME)s/logs/rorem.out.log
-stderr_logfile=%(ENV_FLASHML_HOME)s/logs/rorem.err.log
-environment=FLASHML_ENABLED_ROUTES="remove",FLASHML_PRELOAD="true",FLASHML_REQUIRE_CUDA="true",FLASHML_PORT="8004",PYTHONPATH="%(ENV_FLASHML_HOME)s/src"
+[program:flashml-flux]
+ command=%(ENV_CONDA_ROOT)s/flashml-flux/bin/uvicorn flashml.app:app --host 127.0.0.1 --port 8004 --workers 1 --timeout-keep-alive 75
+ directory=%(ENV_FLASHML_HOME)s
+ autostart=true
+ autorestart=true
+ priority=10
+ startsecs=20
+ startretries=40
+ stopasgroup=true
+ killasgroup=true
+ stdout_logfile=%(ENV_FLASHML_HOME)s/logs/flux.out.log
+ stderr_logfile=%(ENV_FLASHML_HOME)s/logs/flux.err.log
+ environment=FLASHML_ENABLED_ROUTES="remove",FLASHML_PRELOAD="true",FLASHML_REQUIRE_CUDA="true",FLASHML_PORT="8004",PYTHONPATH="%(ENV_FLASHML_HOME)s/src"
 
 ; -----------------------------------------------------------------------------
 ; Public API Gateway

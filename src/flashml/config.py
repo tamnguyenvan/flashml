@@ -58,12 +58,17 @@ class Settings(BaseSettings):
     oneformer_model_id: str = "shi-labs/oneformer_ade20k_swin_large"
     oneformer_model_dir: Path = Path("/workspace/flashml/weights/oneformer")
 
-    rorem_model_dir: Path = Path("/workspace/flashml/weights/rorem")
-    rorem_resolution: int = 1024
-    rorem_dilate_size: int = 20
-    rorem_use_cfg: bool = True
-    rorem_num_inference_steps: int = 30
-    rorem_max_longest_size: int = 1024
+    flux_model_dir: Path = Path("/workspace/flashml/weights/flux")
+    flux_base_model: str = "black-forest-labs/FLUX.2-klein-4B"
+    flux_quant_repo: str = "aydin99/FLUX.2-klein-4B-int8"
+    flux_lora_path: Path = Path("/workspace/flashml/weights/flux/flux-object-remove-lora.safetensors")
+    flux_lora_scale: float = 1.1
+    flux_prompt: str = "Remove the highlighted object from the scene"
+    flux_dilate_size: int = 20
+    flux_highlight_alpha: float = 0.6
+    flux_num_inference_steps: int = 4
+    flux_guidance: float = 0.0
+    flux_max_longest_size: int = 1024
 
     request_id_header: str = "X-Request-ID"
 

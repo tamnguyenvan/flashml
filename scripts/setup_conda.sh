@@ -10,7 +10,7 @@ SIMPLECLICK_GDRIVE_ID="${SIMPLECLICK_GDRIVE_ID:-1GXk6q5fwKo2twkY5ZZGjVKCgJv7XeLA
 
 export FLASHML_HOME CONDA_ROOT
 mkdir -p "${FLASHML_HOME}/third_party" "${FLASHML_HOME}/weights/simpleclick" \
-  "${FLASHML_HOME}/weights/oneformer" "${FLASHML_HOME}/weights/rorem/unet" \
+  "${FLASHML_HOME}/weights/oneformer" "${FLASHML_HOME}/weights/flux" \
   "${FLASHML_HOME}/weights/huggingface" \
   "${FLASHML_HOME}/logs"
 
@@ -60,7 +60,7 @@ create_env flashml-api "${FLASHML_HOME}/envs/environment-api.yml"
 create_env flashml-moge "${FLASHML_HOME}/envs/environment-moge.yml"
 create_env flashml-simpleclick "${FLASHML_HOME}/envs/environment-simpleclick.yml"
 create_env flashml-oneformer "${FLASHML_HOME}/envs/environment-oneformer.yml"
-create_env flashml-rorem "${FLASHML_HOME}/envs/environment-rorem.yml"
+create_env flashml-flux "${FLASHML_HOME}/envs/environment-flux.yml"
 
 conda run --no-capture-output -n flashml-api python -m pip install --upgrade pip
 conda run --no-capture-output -n flashml-api python -m pip install -e "${FLASHML_HOME}"
@@ -136,34 +136,55 @@ snapshot_download(repo_id="Ruicheng/moge-3-vitg", repo_type="model")
 print("MoGe weights ready")
 PY
 
-echo "Setting up RORem-mixed (diffusers) environment..."
-conda run --no-capture-output -n flashml-rorem python -m pip install --upgrade pip
-conda run --no-capture-output -n flashml-rorem python -m pip install \
+echo "Setting up FLUX.2-klein-4B (int8, diffusers) environment..."
+conda run --no-capture-output -n flashml-flux python -m pip install --upgrade pip
+conda run --no-capture-output -n flashml-flux python -m pip install \
   torch torchvision --index-url https://download.pytorch.org/whl/cu128
-conda run --no-capture-output -n flashml-rorem python -m pip install \
-  diffusers transformers accelerate safetensors opencv-python-headless Pillow huggingface_hub xformers
-conda run --no-capture-output -n flashml-rorem python -m pip install -e "${FLASHML_HOME}"
+conda run --no-capture-output -n flashml-flux python -m pip install \
+  "diffusers>=0.40" transformers accelerate optimum-quanto safetensors \
+  huggingface_hub peft opencv-python-headless Pillow
+conda run --no-capture-output -n flashml-flux python -m pip install -e "${FLASHML_HOME}"
 
-RORem_MODEL_DIR="${FLASHML_HOME}/weights/rorem"
-mkdir -p "${RORem_MODEL_DIR}"
+FLUX_MODEL_DIR="${FLASHML_HOME}/weights/flux"
+mkdir -p "${FLASHML_HOME}/weights/flux"
 
-# Download full RORem pipeline from Hugging Face (repo: tamnvvn/RORem)
-# Contains full diffusers pipeline: unet, text_encoder, text_encoder_2, tokenizer, tokenizer_2, vae, scheduler, model_index.json
-if [ -z "$(ls -A "${RORem_MODEL_DIR}")" ]; then
-  echo "Downloading RORem pipeline from Hugging Face..."
+# Download quantized FLUX.2-klein-4B int8 (transformer, text_encoder, tokenizer, + wrapper).
+if [ ! -f "${FLASHML_HOME}/weights/flux/config.json" ]; then
+  echo "Downloading FLUX.2-klein-4B int8 from Hugging Face..."
   HF_HOME="${FLASHML_HOME}/weights/huggingface" \
-    conda run --no-capture-output -n flashml-rorem python - <<'PY'
+    conda run --no-capture-output -n flashml-flux python - <<'PY'
 from huggingface_hub import snapshot_download
 import os
-repo_id = "tamnvvn/RORem"
-local_dir = os.environ["FLASHML_HOME"] + "/weights/rorem"
+repo_id = "aydin99/FLUX.2-klein-4B-int8"
+local_dir = os.environ["FLASHML_HOME"] + "/weights/flux"
 print(f"Downloading {repo_id} -> {local_dir}")
 snapshot_download(repo_id=repo_id, local_dir=local_dir)
-print("RORem weights ready")
+print("FLUX weights ready")
 PY
-  echo "RORem weights ready at ${RORem_MODEL_DIR}"
 else
-  echo "RORem weights already exist at ${RORem_MODEL_DIR}"
+  echo "FLUX weights already exist at ${FLASHML_HOME}/weights/flux"
+fi
+
+# Download the object-removal LoRA (diffusers-format safetensors).
+LORA_PATH="${FLASHML_HOME}/weights/flux/flux-object-remove-lora.safetensors"
+if [ ! -f "${LORA_PATH}" ]; then
+  echo "Downloading fal/flux-2-klein-4B-object-remove-lora..."
+  HF_HOME="${FLASHML_HOME}/weights/huggingface" \
+    conda run --no-capture-output -n flashml-flux python - <<'PY'
+from huggingface_hub import hf_hub_download
+import os
+lora_path = hf_hub_download(
+    repo_id="fal/flux-2-klein-4B-object-remove-lora",
+    filename="flux-object-remove-lora.safetensors",
+)
+os.makedirs(os.environ["FLASHML_HOME"] + "/weights/flux", exist_ok=True)
+dst = os.environ["FLASHML_HOME"] + "/weights/flux/flux-object-remove-lora.safetensors"
+import shutil
+shutil.copyfile(lora_path, dst)
+print("Object-remove LoRA ready")
+PY
+else
+  echo "Object-remove LoRA already exists at ${LORA_PATH}"
 fi
 
 echo

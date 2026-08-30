@@ -1,8 +1,6 @@
-name: flashml-rorem
+name: flashml-flux
 channels:
   - conda-forge
 dependencies:
   - python=3.11
   - pip
-  - opencv
-  - xformers

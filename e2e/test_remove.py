@@ -1,4 +1,4 @@
-"""Client test for ``POST /remove`` (RORem-mixed inpainting).
+"""Client test for ``POST /remove`` (FLUX.2 klein object removal).
 
 Pipeline: Show original -> user draws mask -> Enter -> call API -> show result
 
@@ -87,7 +87,7 @@ def draw_mask_gui(image_bytes: bytes, initial_brush_radius: int = 15) -> bytes:
     last_point = None
     brush_radius = initial_brush_radius
 
-    window_name = "RORem-mixed: Draw mask (L-drag) | +/- size | c=clear | Enter=run | q=quit"
+    window_name = "FLUX.2 klein: Draw mask (L-drag) | +/- size | c=clear | Enter=run | q=quit"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(window_name, min(1200, w), min(900, h))
 
