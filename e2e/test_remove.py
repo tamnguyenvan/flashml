@@ -1,8 +1,6 @@
-"""Client test for ``POST /remove`` (RORem-4S inpainting).
+"""Client test for ``POST /remove`` (RORem-mixed inpainting).
 
-Allows user to interactively draw an inpainting mask with a brush on the image,
-sends the image and mask to the RORem-4S inpainting endpoint, saves the result,
-and shows a side-by-side comparison.
+Pipeline: Show original -> user draws mask -> Enter -> call API -> show result
 
 Usage:
 
@@ -17,6 +15,7 @@ from __future__ import annotations
 
 import io
 import sys
+import time
 from pathlib import Path
 
 # Make the editable-repo import of `e2e.common` work when run directly as
@@ -48,6 +47,7 @@ def run_remove(
     api_key: str,
 ) -> bytes:
     print(f"POST {base_url}/remove (image: {len(image_bytes)} bytes, mask: {len(mask_bytes)} bytes)")
+    start = time.time()
     response = client.post(
         "/remove",
         headers=auth_headers(api_key),
@@ -58,6 +58,8 @@ def run_remove(
         data={"max_size": str(max_size)},
     )
     response.raise_for_status()
+    elapsed = time.time() - start
+    print(f"  Completed in {elapsed:.2f}s")
 
     assert "X-Request-ID" in response.headers, "missing X-Request-ID on /remove"
     content_type = response.headers.get("content-type", "")
@@ -85,21 +87,21 @@ def draw_mask_gui(image_bytes: bytes, initial_brush_radius: int = 15) -> bytes:
     last_point = None
     brush_radius = initial_brush_radius
 
-    window_name = "RORem-4S Remove: Left-Drag=Brush | [+/-]=Radius | [c]=Clear | [Enter]=Inpaint | [q]=Quit"
+    window_name = "RORem-mixed: Draw mask (L-drag) | +/- size | c=clear | Enter=run | q=quit"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(window_name, min(1200, w), min(900, h))
 
-    def redraw() -> np.ndarray:
+    def make_overlay() -> np.ndarray:
         display = orig_img.copy()
-        # Red translucent highlight where mask is drawn
         mask_bool = mask > 0
         display[mask_bool] = (
-            display[mask_bool] * 0.4 + np.array([0, 0, 255], dtype=np.float32) * 0.6
+            display[mask_bool] * 0.35 + np.array([0, 0, 255], dtype=np.float32) * 0.65
         ).astype(np.uint8)
 
-        info_text = f"Brush radius: {brush_radius}px | [+/-]=Change Size | [Enter]=Inpaint | [c]=Clear | [q]=Quit"
-        cv2.putText(display, info_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 3, cv2.LINE_AA)
-        cv2.putText(display, info_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 1, cv2.LINE_AA)
+        # Brush preview circle at cursor would need mouse pos - skip for simplicity
+        info = f"Brush: {brush_radius}px  Mask: {mask_bool.sum()}px  [+/-] size  [c]lear  [Enter] Inpaint  [q]uit"
+        cv2.putText(display, info, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 3, cv2.LINE_AA)
+        cv2.putText(display, info, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 1, cv2.LINE_AA)
         return display
 
     def on_mouse(event, x, y, flags, param):
@@ -121,7 +123,7 @@ def draw_mask_gui(image_bytes: bytes, initial_brush_radius: int = 15) -> bytes:
     cv2.setMouseCallback(window_name, on_mouse)
 
     while True:
-        cv2.imshow(window_name, redraw())
+        cv2.imshow(window_name, make_overlay())
         key = cv2.waitKey(20) & 0xFF
         if key in (13, 32):  # ENTER or SPACE
             if np.count_nonzero(mask) == 0:
@@ -142,13 +144,12 @@ def draw_mask_gui(image_bytes: bytes, initial_brush_radius: int = 15) -> bytes:
     if np.count_nonzero(mask) == 0:
         return b""
 
-    # Encode mask to PNG bytes
     ok, buf = cv2.imencode(".png", mask)
     return buf.tobytes() if ok else b""
 
 
-def show_comparison_gui(image_bytes: bytes, mask_bytes: bytes, inpainted_bytes: bytes) -> None:
-    """Display side-by-side comparison of original, mask, and inpainting result."""
+def show_result_gui(image_bytes: bytes, mask_bytes: bytes, inpainted_bytes: bytes) -> None:
+    """Display side-by-side: Original | Mask Overlay | Inpainted Result"""
     try:
         import cv2
         import numpy as np
@@ -163,34 +164,39 @@ def show_comparison_gui(image_bytes: bytes, mask_bytes: bytes, inpainted_bytes: 
         return
 
     h, w = orig_img.shape[:2]
-    # Resize result and mask to match original if needed
     if result_img.shape[:2] != (h, w):
         result_img = cv2.resize(result_img, (w, h), interpolation=cv2.INTER_LANCZOS4)
 
-    # Mask overlay view
-    mask_view = orig_img.copy()
+    # 1. Original
+    panel1 = orig_img.copy()
+    cv2.putText(panel1, "Original", (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 4, cv2.LINE_AA)
+    cv2.putText(panel1, "Original", (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2, cv2.LINE_AA)
+
+    # 2. Mask overlay on original
+    panel2 = orig_img.copy()
     if mask_img is not None:
         if mask_img.shape[:2] != (h, w):
             mask_img = cv2.resize(mask_img, (w, h), interpolation=cv2.INTER_NEAREST)
         mask_bool = mask_img > 127
-        mask_view[mask_bool] = (
-            mask_view[mask_bool] * 0.4 + np.array([0, 0, 255], dtype=np.float32) * 0.6
+        panel2[mask_bool] = (
+            panel2[mask_bool] * 0.35 + np.array([0, 0, 255], dtype=np.float32) * 0.65
         ).astype(np.uint8)
+    cv2.putText(panel2, "Mask", (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 4, cv2.LINE_AA)
+    cv2.putText(panel2, "Mask", (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2, cv2.LINE_AA)
 
-    # Add labels
-    for title, img in [("1. Original", orig_img), ("2. Mask", mask_view), ("3. Inpainted Result", result_img)]:
-        cv2.putText(img, title, (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 4, cv2.LINE_AA)
-        cv2.putText(img, title, (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2, cv2.LINE_AA)
+    # 3. Inpainted result
+    panel3 = result_img.copy()
+    cv2.putText(panel3, "Inpainted", (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 4, cv2.LINE_AA)
+    cv2.putText(panel3, "Inpainted", (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2, cv2.LINE_AA)
 
-    # Combine side-by-side
-    combined = np.hstack([orig_img, mask_view, result_img])
-    window_name = "RORem-4S Inpainting Result - Press any key to close"
+    combined = np.hstack([panel1, panel2, panel3])
+    window_name = "Result: Original | Mask | Inpainted  (any key to close)"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    cv2.resizeWindow(window_name, min(1600, combined.shape[1]), min(600, combined.shape[0]))
+    cv2.resizeWindow(window_name, min(1800, combined.shape[1]), min(700, combined.shape[0]))
     cv2.imshow(window_name, combined)
-    print("  Displaying result window. Press any key in the window to continue...")
+    print("  Displaying result. Press any key to close...")
     cv2.waitKey(0)
-    cv2.destroyWindow(window_name)
+    cv2.destroyAllWindows()
 
 
 def main() -> int:
@@ -218,7 +224,7 @@ def main() -> int:
         mask_bytes = mask_path.read_bytes()
         mask_filename = mask_path.name
     elif not args.no_gui and has_display():
-        print("Opening brush window... Left-click/drag to paint the region to remove. Press ENTER to submit.")
+        print("Opening brush window... Left-click/drag to paint the region to remove. Press ENTER to run inpainting.")
         mask_bytes = draw_mask_gui(image_bytes)
         if not mask_bytes:
             print("No mask drawn. Exiting.")
@@ -250,7 +256,7 @@ def main() -> int:
             print(f"  saved mask  : {drawn_mask_path}")
 
             if not args.no_gui and has_display():
-                show_comparison_gui(image_bytes, mask_bytes, result_bytes)
+                show_result_gui(image_bytes, mask_bytes, result_bytes)
 
             print("  OK")
         except AssertionError as exc:
