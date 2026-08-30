@@ -146,7 +146,7 @@ conda run --no-capture-output -n flashml-rorem python -m pip install -e "${FLASH
 RORem_UNET_DIR="${FLASHML_HOME}/weights/rorem/unet"
 mkdir -p "${RORem_UNET_DIR}"
 
-# Download RORem-mixed UNet from Hugging Face (repo: tamnvvn/RORem_mixed)
+# Download RORem-mixed UNet from Hugging Face (repo: tamnvvn/RORem)
 # Contains config.json, *.safetensors, *.safetensors.index.json
 if [ -z "$(ls -A "${RORem_UNET_DIR}")" ]; then
   echo "Downloading RORem-mixed UNet weights from Hugging Face..."
@@ -154,7 +154,7 @@ if [ -z "$(ls -A "${RORem_UNET_DIR}")" ]; then
     conda run --no-capture-output -n flashml-rorem python - <<'PY'
 from huggingface_hub import snapshot_download
 import os
-repo_id = "tamnvvn/RORem_mixed"
+repo_id = "tamnvvn/RORem"
 local_dir = os.environ["FLASHML_HOME"] + "/weights/rorem/unet"
 print(f"Downloading {repo_id} -> {local_dir}")
 snapshot_download(repo_id=repo_id, local_dir=local_dir)
