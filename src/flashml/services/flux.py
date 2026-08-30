@@ -4,8 +4,8 @@ Uses the quantized FLUX.2-klein-4B int8 model (image-to-image editing) from
 ``aydin99/FLUX.2-klein-4B-int8``.
 
 The client is responsible for marking the object on the conditioning image
-(e.g. drawing a contour outline around it). This image is passed straight to
-the model with the prompt "Remove the highlighted object from the scene".
+(e.g. drawing a red semi-transparent overlay over it). This image is passed
+straight to the model for editing.
 """
 
 from __future__ import annotations

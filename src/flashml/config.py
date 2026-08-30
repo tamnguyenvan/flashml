@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     flux_model_dir: Path = Path("/workspace/flashml/weights/flux")
     flux_base_model: str = "black-forest-labs/FLUX.2-klein-4B"
     flux_quant_repo: str = "aydin99/FLUX.2-klein-4B-int8"
-    flux_prompt: str = "Remove the highlighted object from the scene"
+    flux_prompt: str = "Remove the object marked by the red highlight from the scene, seamlessly filling the area with the surrounding background"
     flux_num_inference_steps: int = 4
     flux_guidance: float = 0.0
     flux_max_longest_size: int = 1024

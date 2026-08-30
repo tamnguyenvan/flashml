@@ -27,7 +27,7 @@ router = APIRouter(tags=["remove"])
     summary="Remove highlighted objects from an image with FLUX.2 klein",
 )
 async def remove(
-    file: Annotated[UploadFile, File(description="RGB image (PNG or JPEG) with the object already highlighted, e.g. outlined")],
+    file: Annotated[UploadFile, File(description="RGB image (PNG or JPEG) with the object already highlighted, e.g. with a red semi-transparent mask")],
     max_size: Annotated[int, Form(ge=64, le=4096)] = 1024,
     service=Depends(get_flux),
 ) -> Response:

@@ -1,12 +1,11 @@
 """Client test for ``POST /remove`` (FLUX.2 klein object removal).
 
-Pipeline: Show original -> user draws mask -> mask -> contour -> draw outline
+Pipeline: Show original -> user draws mask -> red semi-transparent mask overlay
 -> call API -> show result
 
-The mask is turned into a contour outline drawn onto the image (the object to
-remove is highlighted with an outline). That outlined image is the conditioning
-image sent to the model; the mask itself is not sent (the server trusts the
-client's image).
+The mask is drawn onto the image as a red semi-transparent overlay (the object
+to remove is highlighted). That masked image is the conditioning image sent to
+the model; the mask itself is not sent (the server trusts the client's image).
 
 Usage:
 
@@ -40,31 +39,22 @@ from e2e.common import (
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
-OUTLINE_COLOR = (0, 0, 255)  # BGR red
+MASK_COLOR = (0, 0, 255)  # BGR red
 
 
-def _find_contours(binary):
-    import cv2
-
-    result = cv2.findContours(binary.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    return result[0] if len(result) == 2 else result[1]
-
-
-def _mask_to_outline(mask, thickness: int = 2):
-    """Return a binary outline band tracing the contour of a filled mask."""
-    import cv2
+def _apply_mask_tint(image, mask, alpha: float = 0.5, color=MASK_COLOR):
+    """Return a copy of ``image`` with the masked region tinted semi-transparently."""
     import numpy as np
 
-    outline = np.zeros_like(mask)
-    cv2.drawContours(outline, _find_contours(mask), -1, 255, thickness=thickness)
-    return outline
-
-
-def _draw_outline(image, outline, color=OUTLINE_COLOR, thickness: int = 3):
-    """Return a copy of ``image`` with the object outline drawn in ``color``."""
-    marked = image.copy()
-    cv2.drawContours(marked, _find_contours(outline), -1, color, thickness=thickness)
-    return marked
+    tinted = image.copy()
+    mask_bool = mask > 0
+    if not mask_bool.any():
+        return tinted
+    color_arr = np.array(color, dtype=np.float32)
+    tinted[mask_bool] = (
+        image[mask_bool].astype(np.float32) * (1.0 - alpha) + color_arr * alpha
+    ).astype(np.uint8)
+    return tinted
 
 
 def run_remove(
@@ -113,22 +103,13 @@ def draw_mask_gui(image_bytes: bytes, initial_brush_radius: int = 15) -> bytes:
     last_point = None
     brush_radius = initial_brush_radius
 
-    window_name = "FLUX.2 klein: Draw mask (L-drag, object will be outlined) | +/- size | c=clear | Enter=run | q=quit"
+    window_name = "FLUX.2 klein: Draw mask (L-drag, object will be highlighted) | +/- size | c=clear | Enter=run | q=quit"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(window_name, min(1200, w), min(900, h))
 
     def make_overlay() -> np.ndarray:
-        display = orig_img.copy()
-        outline = _mask_to_outline(mask, thickness=3)
-
-        # Faint fill so the brushed area is visible, plus a solid red outline.
-        mask_bool = mask > 0
-        display[mask_bool] = (
-            display[mask_bool] * 0.25 + np.array([0, 0, 255], dtype=np.float32) * 0.3
-        ).astype(np.uint8)
-        display = _draw_outline(display, outline, color=OUTLINE_COLOR, thickness=3)
-
-        info = f"Brush: {brush_radius}px  Mask: {mask_bool.sum()}px  [+/-] size  [c]lear  [Enter] Remove  [q]uit"
+        display = _apply_mask_tint(orig_img, mask, alpha=0.5)
+        info = f"Brush: {brush_radius}px  Mask: {int(np.count_nonzero(mask))}px  [+/-] size  [c]lear  [Enter] Remove  [q]uit"
         cv2.putText(display, info, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 3, cv2.LINE_AA)
         cv2.putText(display, info, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 1, cv2.LINE_AA)
         return display
@@ -177,20 +158,20 @@ def draw_mask_gui(image_bytes: bytes, initial_brush_radius: int = 15) -> bytes:
     return buf.tobytes() if ok else b""
 
 
-def prepare_outline(image_bytes: bytes, mask_bytes: bytes, outline_thickness: int) -> tuple[bytes, bytes | None]:
-    """Build (conditioning_image, outline_png) from a mask drawn over the image.
+def prepare_outline(image_bytes: bytes, mask_bytes: bytes, alpha: float) -> tuple[bytes, bytes | None]:
+    """Build (conditioning_image, masked_preview_png) from a mask drawn over the image.
 
-    conditioning_image: the source image with the object's contour outline drawn
-    on it (this is what gets sent to the API). outline_png: PNG bytes of the
-    outline band, kept locally for preview/saving only (``None`` when OpenCV is
-    unavailable or outlining fails).
+    conditioning_image: the source image with the masked region tinted as a red
+    semi-transparent overlay (this is what gets sent to the API). masked_preview_png:
+    PNG bytes of the tinted conditioning image, kept locally for preview/saving only
+    (``None`` when OpenCV is unavailable or masking fails).
     """
     try:
         import cv2
         import numpy as np
     except ImportError:
         print(
-            "Note: opencv-python is not installed; sending the original image without an outline.",
+            "Note: opencv-python is not installed; sending the original image without a mask overlay.",
             file=sys.stderr,
         )
         return image_bytes, None
@@ -198,26 +179,24 @@ def prepare_outline(image_bytes: bytes, mask_bytes: bytes, outline_thickness: in
     image_arr = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
     mask_arr = cv2.imdecode(np.frombuffer(mask_bytes, np.uint8), cv2.IMREAD_GRAYSCALE)
     if image_arr is None or mask_arr is None:
-        print("Could not decode image/mask for outlining.", file=sys.stderr)
+        print("Could not decode image/mask for masking.", file=sys.stderr)
         return image_bytes, None
 
     if mask_arr.shape[:2] != image_arr.shape[:2]:
         mask_arr = cv2.resize(mask_arr, (image_arr.shape[1], image_arr.shape[0]), interpolation=cv2.INTER_NEAREST)
 
     mask_bin = (mask_arr > 127).astype(np.uint8) * 255
-    outline = _mask_to_outline(mask_bin, thickness=outline_thickness)
-    conditioning = _draw_outline(image_arr, outline, color=OUTLINE_COLOR, thickness=outline_thickness)
+    conditioning = _apply_mask_tint(image_arr, mask_bin, alpha=alpha)
 
     ok1, conditioning_bytes = cv2.imencode(".png", conditioning)
-    ok2, outline_bytes = cv2.imencode(".png", outline)
-    if not (ok1 and ok2):
-        print("Could not encode outline image.", file=sys.stderr)
+    if not ok1:
+        print("Could not encode conditioning image.", file=sys.stderr)
         return image_bytes, None
-    return conditioning_bytes.tobytes(), outline_bytes.tobytes()
+    return conditioning_bytes.tobytes(), conditioning_bytes.tobytes()
 
 
-def show_result_gui(image_bytes: bytes, mask_bytes: bytes, inpainted_bytes: bytes) -> None:
-    """Display side-by-side: Original | Outline Overlay | Inpainted Result"""
+def show_result_gui(image_bytes: bytes, mask_bytes: bytes, inpainted_bytes: bytes, alpha: float = 0.5) -> None:
+    """Display side-by-side: Original | Masked Overlay | Inpainted Result"""
     try:
         import cv2
         import numpy as np
@@ -240,14 +219,14 @@ def show_result_gui(image_bytes: bytes, mask_bytes: bytes, inpainted_bytes: byte
     cv2.putText(panel1, "Original", (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 4, cv2.LINE_AA)
     cv2.putText(panel1, "Original", (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2, cv2.LINE_AA)
 
-    # 2. Outline overlay on original (what was sent to the model)
+    # 2. Masked tint overlay on original (what was sent to the model)
     panel2 = orig_img.copy()
     if mask_img is not None:
         if mask_img.shape[:2] != (h, w):
             mask_img = cv2.resize(mask_img, (w, h), interpolation=cv2.INTER_NEAREST)
-        panel2 = _draw_outline(panel2, (mask_img > 127).astype(np.uint8) * 255, color=OUTLINE_COLOR, thickness=3)
-    cv2.putText(panel2, "Outline", (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 4, cv2.LINE_AA)
-    cv2.putText(panel2, "Outline", (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2, cv2.LINE_AA)
+        panel2 = _apply_mask_tint(panel2, (mask_img > 127).astype(np.uint8) * 255, alpha=alpha)
+    cv2.putText(panel2, "Masked", (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 4, cv2.LINE_AA)
+    cv2.putText(panel2, "Masked", (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2, cv2.LINE_AA)
 
     # 3. Inpainted result
     panel3 = result_img.copy()
@@ -255,7 +234,7 @@ def show_result_gui(image_bytes: bytes, mask_bytes: bytes, inpainted_bytes: byte
     cv2.putText(panel3, "Inpainted", (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2, cv2.LINE_AA)
 
     combined = np.hstack([panel1, panel2, panel3])
-    window_name = "Result: Original | Outline | Inpainted  (any key to close)"
+    window_name = "Result: Original | Masked | Inpainted  (any key to close)"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(window_name, min(1800, combined.shape[1]), min(700, combined.shape[0]))
     cv2.imshow(window_name, combined)
@@ -270,7 +249,10 @@ def main() -> int:
     parser.add_argument("--mask", default=None, help="Path to an existing binary mask PNG (optional)")
     parser.add_argument("--max-size", type=int, default=1024, help="Longest-side limit (default: 1024)")
     parser.add_argument(
-        "--outline-thickness", type=int, default=3, help="Outline contour thickness in px (default: 3)"
+        "--mask-alpha",
+        type=float,
+        default=0.5,
+        help="Semi-transparency of the red mask overlay, 0.0-1.0 (default: 0.5)",
     )
     parser.add_argument("--out", default=None, help="Path to save the inpainted result PNG (default: <image_stem>_inpainted.png)")
     parser.add_argument("--no-gui", action="store_true", help="Disable interactive GUI even if display is available")
@@ -304,8 +286,8 @@ def main() -> int:
         print("No mask specified and GUI disabled. Using default center box mask.")
         mask_bytes = make_mask_png(512, 512)
 
-    # mask -> contour -> draw outline -> call API -> result
-    conditioning_bytes, outline_bytes = prepare_outline(image_bytes, mask_bytes, args.outline_thickness)
+    # mask -> red semi-transparent overlay -> call API -> result
+    conditioning_bytes, preview_bytes = prepare_outline(image_bytes, mask_bytes, args.mask_alpha)
 
     out_path = resolve_out_path(args.image, "output_inpainted.png", "_inpainted.png", args.out)
 
@@ -322,10 +304,10 @@ def main() -> int:
             out_path.write_bytes(result_bytes)
             print(f"  saved result: {out_path} ({len(result_bytes)} bytes)")
 
-            if outline_bytes is not None:
-                outline_path = out_path.parent / f"{out_path.stem}_outline.png"
-                outline_path.write_bytes(outline_bytes)
-                print(f"  saved outline: {outline_path}")
+            if preview_bytes is not None:
+                preview_path = out_path.parent / f"{out_path.stem}_masked.png"
+                preview_path.write_bytes(preview_bytes)
+                print(f"  saved masked preview: {preview_path}")
 
             # Save the drawn mask alongside the result for convenience
             drawn_mask_path = out_path.parent / f"{out_path.stem}_mask.png"
@@ -334,7 +316,7 @@ def main() -> int:
                 print(f"  saved mask  : {drawn_mask_path}")
 
             if not args.no_gui and has_display():
-                show_result_gui(image_bytes, outline_bytes or mask_bytes, result_bytes)
+                show_result_gui(image_bytes, mask_bytes, result_bytes, alpha=args.mask_alpha)
 
             print("  OK")
         except AssertionError as exc:
