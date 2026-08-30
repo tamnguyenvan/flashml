@@ -1,7 +1,6 @@
-"""RORem-mixed inpainting backend for object removal (``POST /remove``).
+"""RORem inpainting backend for object removal (``POST /remove``).
 
-Uses diffusers with SDXL-inpainting base + RORem-mixed UNet for high-quality inference.
-RORem-mixed is trained on mixed resolution (512x512 and 1024x1024) for superior quality.
+Uses diffusers pipeline from tamnvvn/RORem (full pipeline: unet, text_encoders, tokenizers, vae, scheduler).
 """
 
 from __future__ import annotations
@@ -117,34 +116,29 @@ class RORemService:
 
     def _load_locked(self) -> None:
         import torch
-        from diffusers import AutoPipelineForInpainting, UNet2DConditionModel
+        from diffusers import AutoPipelineForInpainting
 
         if self.settings.require_cuda and not torch.cuda.is_available():
-            raise InferenceError("CUDA is required for RORem-mixed but is not available")
+            raise InferenceError("CUDA is required for RORem but is not available")
 
         self.device = torch.device(self.settings.device if torch.cuda.is_available() else "cpu")
-        logger.info("Loading RORem-mixed on %s", self.device)
+        logger.info("Loading RORem pipeline on %s", self.device)
 
-        base_model = self.settings.rorem_base_model
-        unet_path = self.settings.rorem_unet_path
+        model_dir = Path(self.settings.rorem_model_dir)
+
+        if not model_dir.exists() or not (model_dir / "model_index.json").exists():
+            raise InferenceError(f"RORem pipeline not found at {model_dir}. Run setup_conda.sh to download weights.")
 
         pipe = AutoPipelineForInpainting.from_pretrained(
-            base_model,
+            str(model_dir),
             torch_dtype=torch.float16,
             variant="fp16",
         )
 
-        if unet_path and Path(unet_path).exists():
-            logger.info("Loading RORem-mixed UNet from %s", unet_path)
-            unet = UNet2DConditionModel.from_pretrained(unet_path).to(self.device, dtype=torch.float16)
-            pipe.unet = unet
-        else:
-            logger.warning("RORem UNet path not found: %s, using base model UNet", unet_path)
-
         pipe.to(self.device)
         self.pipe = pipe
         self._ready = True
-        logger.info("RORem-mixed ready on %s", self.device)
+        logger.info("RORem ready on %s", self.device)
 
     def _infer_locked(self, image, mask):
         try:
@@ -181,8 +175,8 @@ class RORemService:
 
             return result
         except Exception as exc:
-            logger.exception("RORem-mixed inference failed")
-            raise InferenceError("RORem-mixed inference failed") from exc
+            logger.exception("RORem inference failed")
+            raise InferenceError("RORem inference failed") from exc
 
 
 class RemoteRORemService:

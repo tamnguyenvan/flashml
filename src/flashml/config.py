@@ -59,8 +59,6 @@ class Settings(BaseSettings):
     oneformer_model_dir: Path = Path("/workspace/flashml/weights/oneformer")
 
     rorem_model_dir: Path = Path("/workspace/flashml/weights/rorem")
-    rorem_base_model: str = "diffusers/stable-diffusion-xl-1.0-inpainting-0.1"
-    rorem_unet_path: Path = Path("/workspace/flashml/weights/rorem/unet")
     rorem_resolution: int = 1024
     rorem_dilate_size: int = 20
     rorem_use_cfg: bool = True

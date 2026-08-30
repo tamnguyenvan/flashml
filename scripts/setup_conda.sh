@@ -143,26 +143,26 @@ conda run --no-capture-output -n flashml-rorem python -m pip install \
   diffusers transformers accelerate safetensors opencv-python-headless Pillow huggingface_hub xformers
 conda run --no-capture-output -n flashml-rorem python -m pip install -e "${FLASHML_HOME}"
 
-RORem_UNET_DIR="${FLASHML_HOME}/weights/rorem/unet"
-mkdir -p "${RORem_UNET_DIR}"
+RORem_MODEL_DIR="${FLASHML_HOME}/weights/rorem"
+mkdir -p "${RORem_MODEL_DIR}"
 
-# Download RORem-mixed UNet from Hugging Face (repo: tamnvvn/RORem)
-# Contains config.json, *.safetensors, *.safetensors.index.json
-if [ -z "$(ls -A "${RORem_UNET_DIR}")" ]; then
-  echo "Downloading RORem-mixed UNet weights from Hugging Face..."
+# Download full RORem pipeline from Hugging Face (repo: tamnvvn/RORem)
+# Contains full diffusers pipeline: unet, text_encoder, text_encoder_2, tokenizer, tokenizer_2, vae, scheduler, model_index.json
+if [ -z "$(ls -A "${RORem_MODEL_DIR}")" ]; then
+  echo "Downloading RORem pipeline from Hugging Face..."
   HF_HOME="${FLASHML_HOME}/weights/huggingface" \
     conda run --no-capture-output -n flashml-rorem python - <<'PY'
 from huggingface_hub import snapshot_download
 import os
 repo_id = "tamnvvn/RORem"
-local_dir = os.environ["FLASHML_HOME"] + "/weights/rorem/unet"
+local_dir = os.environ["FLASHML_HOME"] + "/weights/rorem"
 print(f"Downloading {repo_id} -> {local_dir}")
 snapshot_download(repo_id=repo_id, local_dir=local_dir)
-print("RORem-mixed weights ready")
+print("RORem weights ready")
 PY
-  echo "RORem-mixed weights ready at ${RORem_UNET_DIR}"
+  echo "RORem weights ready at ${RORem_MODEL_DIR}"
 else
-  echo "RORem-mixed weights already exist at ${RORem_UNET_DIR}"
+  echo "RORem weights already exist at ${RORem_MODEL_DIR}"
 fi
 
 echo
