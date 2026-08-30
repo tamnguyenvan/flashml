@@ -64,6 +64,7 @@ create_env flashml-rorem "${FLASHML_HOME}/envs/environment-rorem.yml"
 
 conda run --no-capture-output -n flashml-api python -m pip install --upgrade pip
 conda run --no-capture-output -n flashml-api python -m pip install -e "${FLASHML_HOME}"
+conda run --no-capture-output -n flashml-api python -m pip install Pillow
 
 if [ ! -d "${FLASHML_HOME}/third_party/MoGe/.git" ]; then
   git clone --filter=blob:none --no-checkout https://github.com/microsoft/MoGe.git \
