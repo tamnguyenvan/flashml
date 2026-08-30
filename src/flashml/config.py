@@ -61,8 +61,6 @@ class Settings(BaseSettings):
     flux_model_dir: Path = Path("/workspace/flashml/weights/flux")
     flux_base_model: str = "black-forest-labs/FLUX.2-klein-4B"
     flux_quant_repo: str = "aydin99/FLUX.2-klein-4B-int8"
-    flux_lora_path: Path = Path("/workspace/flashml/weights/flux/flux-object-remove-lora.safetensors")
-    flux_lora_scale: float = 1.1
     flux_prompt: str = "Remove the highlighted object from the scene"
     flux_dilate_size: int = 20
     flux_highlight_alpha: float = 0.6

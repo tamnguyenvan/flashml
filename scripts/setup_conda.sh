@@ -165,28 +165,6 @@ else
   echo "FLUX weights already exist at ${FLASHML_HOME}/weights/flux"
 fi
 
-# Download the object-removal LoRA (diffusers-format safetensors).
-LORA_PATH="${FLASHML_HOME}/weights/flux/flux-object-remove-lora.safetensors"
-if [ ! -f "${LORA_PATH}" ]; then
-  echo "Downloading fal/flux-2-klein-4B-object-remove-lora..."
-  HF_HOME="${FLASHML_HOME}/weights/huggingface" \
-    conda run --no-capture-output -n flashml-flux python - <<'PY'
-from huggingface_hub import hf_hub_download
-import os
-lora_path = hf_hub_download(
-    repo_id="fal/flux-2-klein-4B-object-remove-lora",
-    filename="flux-object-remove-lora.safetensors",
-)
-os.makedirs(os.environ["FLASHML_HOME"] + "/weights/flux", exist_ok=True)
-dst = os.environ["FLASHML_HOME"] + "/weights/flux/flux-object-remove-lora.safetensors"
-import shutil
-shutil.copyfile(lora_path, dst)
-print("Object-remove LoRA ready")
-PY
-else
-  echo "Object-remove LoRA already exists at ${LORA_PATH}"
-fi
-
 echo
 echo "Setup complete."
 echo "  FLASHML_HOME=${FLASHML_HOME}"

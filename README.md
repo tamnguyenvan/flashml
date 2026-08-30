@@ -7,7 +7,7 @@ Unified FastAPI service for several inference stacks, without changing their alg
 | `POST /reconstruct` | MoGe-3 | multipart image (`file`) | ZIP (`point_map.npy`, `metadata.json`, optional `output.glb` / debug PNGs) |
 | `POST /interactive-segment` | SimpleClick | JSON image + clicks | PNG mask (base64) |
 | `POST /segment` | OneFormer ADE20K | JSON image | wall / floor / rug PNG masks |
-| `POST /remove` | FLUX.2 klein 4B (int8) + object-remove LoRA | multipart image (`file`) + mask (`mask`) | object-removed PNG |
+| `POST /remove` | FLUX.2 klein 4B (int8) image editing | multipart image (`file`) + mask (`mask`) | object-removed PNG |
 
 `POST /predict` is kept as an alias of `/reconstruct` for the existing DreamRoom MoGe client.
 

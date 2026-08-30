@@ -1,10 +1,11 @@
 """FLUX.2 klein 4B (int8) object-removal backend for ``POST /remove``.
 
-Uses the quantized FLUX.2-klein-4B int8 model from ``aydin99/FLUX.2-klein-4B-int8``
-plus the object-removal LoRA from ``fal/flux-2-klein-4B-object-remove-lora``.
+Uses the quantized FLUX.2-klein-4B int8 model (image-to-image editing) from
+``aydin99/FLUX.2-klein-4B-int8``.
 
 The binary mask region is drawn as a visible highlight overlay on the source
-image and the model is prompted to remove the highlighted object.
+image and the model is prompted to remove the highlighted object, relying on
+FLUX.2 klein's built-in editing capability (no LoRA).
 """
 
 from __future__ import annotations
@@ -149,11 +150,6 @@ class FluxService:
         if not Path(model_path).exists():
             raise InferenceError(f"FLUX model not found at {model_path}. Run setup_conda.sh to download weights.")
 
-        lora_path = str(self.settings.flux_lora_path)
-        if not Path(lora_path).exists():
-            raise InferenceError(f"FLUX object-remove LoRA not found at {lora_path}. Run setup_conda.sh.")
-
-        # Load the wrapper class shipped in the quantized repo.
         wrapper_path = hf_hub_download(
             "aydin99/FLUX.2-klein-4B-int8",
             "quantized_flux2.py",
@@ -194,9 +190,6 @@ class FluxService:
         pipe.text_encoder = text_encoder
         pipe.tokenizer = tokenizer
         pipe.to(self.device)
-
-        pipe.load_lora_weights(lora_path, adapter_name="object_remove")
-        pipe.set_adapters(["object_remove"], adapter_weights=[self.settings.flux_lora_scale])
 
         self.pipe = pipe
         self._ready = True

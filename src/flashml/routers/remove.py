@@ -24,7 +24,7 @@ router = APIRouter(tags=["remove"])
         500: {"model": ErrorResponse},
         503: {"model": ErrorResponse},
     },
-    summary="Remove objects from an image with FLUX.2 klein (object-removal LoRA)",
+    summary="Remove highlighted objects from an image with FLUX.2 klein",
 )
 async def remove(
     file: Annotated[UploadFile, File(description="RGB image (PNG or JPEG)")],
