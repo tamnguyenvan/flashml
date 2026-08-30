@@ -89,7 +89,7 @@ Requests to the inference routes require an `X-API-Key` header **only if** `FLAS
 ```bash
 curl -X POST http://localhost:8000/remove \
   -H "X-API-Key: <your-key>" \
-  -F file=@room.png -F mask=@mask.png
+  -F file=@outlined_room.png
 ```
 
 - A missing or invalid key returns `401` with `{"error", "code": "unauthorized", "request_id"}`.
@@ -160,8 +160,9 @@ These match the previous Modal endpoints.
 
 `POST /remove` — `multipart/form-data`
 
-- `file` (required) — RGB image (PNG or JPEG) containing the object to remove
-- `mask` (required) — binary mask PNG (white = the region to inpaint away)
+- `file` (required) — RGB image (PNG or JPEG) with the object to remove already
+  highlighted on it (e.g. a contour outline drawn around the object); this is the
+  conditioning image sent to the model
 - `max_size` 64–4096, default `1024` (longest-side limit; larger images are downscaled)
 
 Returns the inpainted result as `image/png`.

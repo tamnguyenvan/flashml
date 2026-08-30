@@ -27,8 +27,7 @@ router = APIRouter(tags=["remove"])
     summary="Remove highlighted objects from an image with FLUX.2 klein",
 )
 async def remove(
-    file: Annotated[UploadFile, File(description="RGB image (PNG or JPEG)")],
-    mask: Annotated[UploadFile, File(description="Binary mask PNG (white = region to remove)")],
+    file: Annotated[UploadFile, File(description="RGB image (PNG or JPEG) with the object already highlighted, e.g. outlined")],
     max_size: Annotated[int, Form(ge=64, le=4096)] = 1024,
     service=Depends(get_flux),
 ) -> Response:
@@ -36,23 +35,17 @@ async def remove(
     image_raw = await file.read(settings.max_upload_bytes + 1)
     if len(image_raw) > settings.max_upload_bytes:
         raise PayloadTooLargeError(settings.max_upload_bytes)
-    mask_raw = await mask.read(settings.max_upload_bytes + 1)
-    if len(mask_raw) > settings.max_upload_bytes:
-        raise PayloadTooLargeError(settings.max_upload_bytes)
 
     if isinstance(service, RemoteFluxService):
         content = await service.remove_remote(
             image_raw,
-            mask_raw,
             image_content_type=file.content_type,
-            mask_content_type=mask.content_type,
             max_size=max_size,
         )
     else:
         content = await asyncio.to_thread(
             service.remove,
             image_raw,
-            mask_raw,
             max_size=max_size,
         )
 

@@ -3,9 +3,9 @@
 Uses the quantized FLUX.2-klein-4B int8 model (image-to-image editing) from
 ``aydin99/FLUX.2-klein-4B-int8``.
 
-The binary mask region is drawn as a visible highlight overlay on the source
-image and the model is prompted to remove the highlighted object, relying on
-FLUX.2 klein's built-in editing capability (no LoRA).
+The client is responsible for marking the object on the conditioning image
+(e.g. drawing a contour outline around it). This image is passed straight to
+the model with the prompt "Remove the highlighted object from the scene".
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import logging
 import threading
 from pathlib import Path
 
-from PIL import Image, ImageFilter
+from PIL import Image
 
 from flashml.config import Settings
 from flashml.errors import InferenceError, InvalidImageError
@@ -32,40 +32,10 @@ def _decode_rgb(image_bytes: bytes):
         raise InvalidImageError("file could not be decoded; use a PNG or JPEG image") from exc
 
 
-def _decode_mask(mask_bytes: bytes):
-    try:
-        return Image.open(io.BytesIO(mask_bytes)).convert("L")
-    except (OSError, ValueError) as exc:
-        raise InvalidImageError("mask could not be decoded; use a single-channel PNG") from exc
-
-
 def _pil_to_png(image) -> bytes:
     output = io.BytesIO()
     image.save(output, format="PNG")
     return output.getvalue()
-
-
-def _dilate_mask(mask_image, dilate_size: int):
-    if dilate_size <= 0:
-        return mask_image
-
-    if dilate_size % 2 == 0:
-        dilate_size += 1
-
-    mask_image = mask_image.convert("L")
-    mask_image = mask_image.filter(ImageFilter.MaxFilter(dilate_size))
-    return mask_image
-
-
-def _highlight_mask(image, mask, alpha: float = 0.6):
-    """Return a copy of ``image`` with the mask region tinted with a visible overlay."""
-    tint = Image.new("RGB", image.size, (255, 0, 0))
-    mask_l = mask.convert("L").resize(image.size, Image.NEAREST)
-    return Image.composite(
-        Image.blend(image, tint, alpha),
-        image,
-        mask_l,
-    )
 
 
 def _round_dims(width: int, height: int, multiple_of: int) -> tuple[int, int]:
@@ -100,13 +70,9 @@ class FluxService:
             detail=str(self.settings.flux_model_dir),
         )
 
-    def remove(self, image_bytes: bytes, mask_bytes: bytes, *, max_size: int) -> bytes:
+    def remove(self, image_bytes: bytes, *, max_size: int) -> bytes:
         self.preload()
         image = _decode_rgb(image_bytes)
-        mask = _decode_mask(mask_bytes)
-
-        if mask.size != image.size:
-            mask = mask.resize(image.size, Image.NEAREST)
 
         longest = max(image.size)
         if longest > max_size:
@@ -115,13 +81,9 @@ class FluxService:
                 max(1, round(image.height * max_size / longest)),
             )
             image = image.resize(new_size, Image.BILINEAR)
-            mask = mask.resize(new_size, Image.NEAREST)
-
-        mask = _dilate_mask(mask, self.settings.flux_dilate_size)
-        highlighted = _highlight_mask(image, mask, alpha=self.settings.flux_highlight_alpha)
 
         with self._lock:
-            result = self._infer_locked(image, highlighted)
+            result = self._infer_locked(image)
 
         if result.size != image.size:
             result = result.resize(image.size, Image.BILINEAR)
@@ -195,7 +157,7 @@ class FluxService:
         self._ready = True
         logger.info("FLUX.2-klein-4B ready on %s", self.device)
 
-    def _infer_locked(self, image, highlighted):
+    def _infer_locked(self, conditioning):
         try:
             prompt = self.settings.flux_prompt
             steps = self.settings.flux_num_inference_steps
@@ -204,10 +166,10 @@ class FluxService:
             # Round the source dims to the model's required multiple so the
             # generated latents and the conditioning image agree.
             multiple_of = self.pipe.vae_scale_factor * 2 if hasattr(self.pipe, "vae_scale_factor") else 32
-            width, height = _round_dims(highlighted.width, highlighted.height, multiple_of)
+            width, height = _round_dims(conditioning.width, conditioning.height, multiple_of)
 
             result = self.pipe(
-                image=highlighted,
+                image=conditioning,
                 prompt=prompt,
                 height=height,
                 width=width,
@@ -246,10 +208,8 @@ class RemoteFluxService:
     async def remove_remote(
         self,
         image_bytes: bytes,
-        mask_bytes: bytes,
         *,
         image_content_type: str | None,
-        mask_content_type: str | None,
         max_size: int,
     ) -> bytes:
         result = await self._proxy.request(
@@ -258,7 +218,6 @@ class RemoteFluxService:
             data={"max_size": str(max_size)},
             files={
                 "file": ("image", image_bytes, image_content_type or "image/png"),
-                "mask": ("mask.png", mask_bytes, mask_content_type or "image/png"),
             },
         )
         return result.content

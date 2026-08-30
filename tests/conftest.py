@@ -108,7 +108,7 @@ class FakeFlux:
     def status(self) -> ServiceStatus:
         return ServiceStatus(enabled=True, backend="local", ready=True, detail="fake")
 
-    def remove(self, image_bytes: bytes, mask_bytes: bytes, *, max_size: int) -> bytes:
+    def remove(self, image_bytes: bytes, *, max_size: int) -> bytes:
         return PNG_1X1
 
 

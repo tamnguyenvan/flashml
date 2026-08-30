@@ -76,10 +76,7 @@ def test_segment_ok(client):
 def test_remove_ok(client):
     response = client.post(
         "/remove",
-        files={
-            "file": ("room.png", PNG_1X1, "image/png"),
-            "mask": ("mask.png", PNG_1X1, "image/png"),
-        },
+        files={"file": ("room.png", PNG_1X1, "image/png")},
         data={"max_size": "800"},
     )
     assert response.status_code == 200
@@ -87,11 +84,8 @@ def test_remove_ok(client):
     assert response.content == PNG_1X1
 
 
-def test_remove_requires_mask(client):
-    response = client.post(
-        "/remove",
-        files={"file": ("room.png", PNG_1X1, "image/png")},
-    )
+def test_remove_requires_file(client):
+    response = client.post("/remove")
     assert response.status_code in (422, 400)
 
 
