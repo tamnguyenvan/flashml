@@ -107,10 +107,15 @@ python -m pytest
 After `scripts/setup_conda.sh` has created the environments, start the gateway plus the four workers under Supervisor:
 
 ```bash
-./scripts/start.sh
+./scripts/start.sh            # foreground (logs stream to terminal)
+./scripts/start.sh --daemon   # background daemon (recommended on bare VMs)
+./scripts/stop.sh             # shut down a daemonized instance
 ```
 
 Supervisor keeps all processes alive. `scripts/vastai_onstart.sh` automates the full Vast.ai boot sequence (env setup, cloning, and start).
+
+> In daemon mode, supervisor runs detached, so you don't need to keep a tmux panel open.
+> Inspect logs under `logs/` and manage processes with `supervisorctl -c conf/supervisord.conf status`.
 
 ## Request contracts
 

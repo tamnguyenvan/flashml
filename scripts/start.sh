@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Run supervisord in the background (true) or foreground (false).
+# Foreground keeps logs streaming to the terminal but requires keeping it open.
+DAEMON=0
+case "${1:-}" in
+  --daemon) DAEMON=1; shift ;;
+  --foreground) DAEMON=0; shift ;;
+esac
+
 FLASHML_HOME="${FLASHML_HOME:-$(cd "$(dirname "$0")/.." && pwd)}"
 if [ -z "${CONDA_ROOT:-}" ]; then
   if [ -d "/venv" ]; then
@@ -30,8 +38,6 @@ export FLASHML_SIMPLECLICK_ROOT="${FLASHML_SIMPLECLICK_ROOT:-${FLASHML_HOME}/thi
 export FLASHML_SIMPLECLICK_CHECKPOINT="${FLASHML_SIMPLECLICK_CHECKPOINT:-${FLASHML_HOME}/weights/simpleclick/cocolvis_vit_huge.pth}"
 export FLASHML_ONEFORMER_MODEL_DIR="${FLASHML_ONEFORMER_MODEL_DIR:-${FLASHML_HOME}/weights/oneformer}"
 export FLASHML_ROREM_MODEL_DIR="${FLASHML_ROREM_MODEL_DIR:-${FLASHML_HOME}/weights/rorem}"
-export FLASHML_ROREM_UNET_PATH="${FLASHML_ROREM_UNET_PATH:-${FLASHML_HOME}/weights/rorem/unet}"
-export FLASHML_ROREM_LORA_PATH="${FLASHML_ROREM_LORA_PATH:-${FLASHML_HOME}/weights/rorem/lora}"
 export HF_HOME="${HF_HOME:-${FLASHML_HOME}/weights/huggingface}"
 export OPENCV_IO_ENABLE_OPENEXR="${OPENCV_IO_ENABLE_OPENEXR:-1}"
 
@@ -47,4 +53,12 @@ if [ ! -x "${CONDA_ROOT}/flashml-api/bin/uvicorn" ]; then
   exit 1
 fi
 
-exec supervisord -c "${FLASHML_HOME}/conf/supervisord.conf"
+if [ "$DAEMON" -eq 1 ]; then
+  export SUPERVISOR_NODAEMON="false"
+  echo "Starting supervisord in the background (daemon). Logs: ${FLASHML_HOME}/logs/"
+  exec supervisord -c "${FLASHML_HOME}/conf/supervisord.conf" -d
+else
+  export SUPERVISOR_NODAEMON="true"
+  echo "Starting supervisord in the foreground. Use --daemon to run it in the background."
+  exec supervisord -c "${FLASHML_HOME}/conf/supervisord.conf"
+fi

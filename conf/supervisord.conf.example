@@ -11,7 +11,8 @@
 file=/tmp/flashml-supervisor.sock
 
 [supervisord]
-nodaemon=true
+; start.sh exports SUPERVISOR_NODAEMON=true (foreground) or false (--daemon)
+nodaemon=%(ENV_SUPERVISOR_NODAEMON)s
 logfile=%(ENV_FLASHML_HOME)s/logs/supervisord.log
 pidfile=/tmp/flashml-supervisord.pid
 childlogdir=%(ENV_FLASHML_HOME)s/logs

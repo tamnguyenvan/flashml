@@ -229,6 +229,11 @@ def main() -> int:
         if not mask_bytes:
             print("No mask drawn. Exiting.")
             return 0
+        # Save the drawn mask immediately so it can be inspected before inpainting.
+        out_path_early = resolve_out_path(args.image, "output.png", "_output.png", args.out)
+        drawn_mask_path = out_path_early.parent / f"{out_path_early.stem}_mask.png"
+        drawn_mask_path.write_bytes(mask_bytes)
+        print(f"  saved drawn mask: {drawn_mask_path}")
     else:
         print("No mask specified and GUI disabled. Using default center box mask.")
         mask_bytes = make_mask_png(512, 512)
