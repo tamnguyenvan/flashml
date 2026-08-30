@@ -10,7 +10,10 @@ import logging
 import threading
 from pathlib import Path
 
-from PIL import Image, ImageFilter
+# Module level: Image is referenced in remove() and _infer_locked() (resize
+# filters), which had no import of their own - only _decode_rgb/_decode_mask
+# imported it locally, so those call sites raised NameError on first inference.
+from PIL import Image
 
 from flashml.config import Settings
 from flashml.errors import InferenceError, InvalidImageError
@@ -21,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 
 def _decode_rgb(image_bytes: bytes):
+    from PIL import Image
+
     try:
         return Image.open(io.BytesIO(image_bytes)).convert("RGB")
     except (OSError, ValueError) as exc:
@@ -28,6 +33,8 @@ def _decode_rgb(image_bytes: bytes):
 
 
 def _decode_mask(mask_bytes: bytes):
+    from PIL import Image
+
     try:
         return Image.open(io.BytesIO(mask_bytes)).convert("L")
     except (OSError, ValueError) as exc:
@@ -41,19 +48,21 @@ def _pil_to_png(image) -> bytes:
 
 
 def _dilate_mask(mask_image, dilate_size: int):
+    from PIL import ImageFilter
+
     if dilate_size <= 0:
         return mask_image
 
-    # PIL's MaxFilter requires an odd, positive kernel size; coerce even sizes
-    # up so the requested dilation still applies.
-    if dilate_size % 2 == 0:
-        dilate_size += 1
-
-    # MaxFilter (dilation) on the grayscale mask. Avoids the opencv numpy path
-    # entirely, sidestepping the libtiff/libjpeg clash in the venv.
-    mask_image = mask_image.convert("L")
-    mask_image = mask_image.filter(ImageFilter.MaxFilter(dilate_size))
-    return mask_image
+    # PIL rather than cv2 here. Importing cv2 in this worker thread, after the
+    # CUDA pipeline is up, raises an ImportError in this env: libtiff.so.6
+    # wants jpeg12_write_raw_data from LIBJPEG_8.0 and the installed
+    # libjpeg-turbo does not export it. (cv2 imports fine standalone, so this
+    # only bites at request time.) MaxFilter over a k x k window is the same
+    # operation as cv2.dilate with a np.ones((k, k)) kernel; it needs k odd.
+    k = int(dilate_size)
+    if k % 2 == 0:
+        k += 1
+    return mask_image.convert("L").filter(ImageFilter.MaxFilter(k))
 
 
 class RORemService:
@@ -86,6 +95,8 @@ class RORemService:
         self.preload()
         image = _decode_rgb(image_bytes)
         mask = _decode_mask(mask_bytes)
+
+        from PIL import Image
 
         if mask.size != image.size:
             mask = mask.resize(image.size, Image.NEAREST)
@@ -124,6 +135,10 @@ class RORemService:
         if not model_dir.exists() or not (model_dir / "model_index.json").exists():
             raise InferenceError(f"RORem pipeline not found at {model_dir}. Run setup_conda.sh to download weights.")
 
+        # No variant= here: the tamnvvn/RORem repo ships plain
+        # `diffusion_pytorch_model-0000N-of-00002.safetensors`, not the
+        # `*.fp16.safetensors` filenames that variant="fp16" looks for.
+        # torch_dtype still casts the weights to fp16 as they load.
         pipe = AutoPipelineForInpainting.from_pretrained(
             str(model_dir),
             torch_dtype=torch.float16,
