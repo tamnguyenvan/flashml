@@ -7,6 +7,7 @@ from flashml.config import Settings
 if TYPE_CHECKING:
     from flashml.services.flux import FluxService, RemoteFluxService
     from flashml.services.moge import MogeService, RemoteMogeService
+    from flashml.services.multimatte import MultiMatteService, RemoteMultiMatteService
     from flashml.services.oneformer import OneFormerService, RemoteOneFormerService
     from flashml.services.simpleclick import RemoteSimpleClickService, SimpleClickService
 
@@ -17,3 +18,4 @@ class AppState:
     simpleclick: SimpleClickService | RemoteSimpleClickService | None = None
     oneformer: OneFormerService | RemoteOneFormerService | None = None
     flux: FluxService | RemoteFluxService | None = None
+    multimatte: MultiMatteService | RemoteMultiMatteService | None = None

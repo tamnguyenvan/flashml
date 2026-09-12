@@ -1,5 +1,7 @@
 import base64
 
+import pytest
+
 from tests.conftest import PNG_1X1
 
 
@@ -87,6 +89,29 @@ def test_remove_ok(client):
 def test_remove_requires_file(client):
     response = client.post("/remove")
     assert response.status_code in (422, 400)
+
+
+def test_matte_ok(client):
+    image = "data:image/png;base64," + base64.b64encode(PNG_1X1).decode("ascii")
+    response = client.post("/matte", json={"image": image, "prompt": "the dog"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["mask_format"] == "png"
+    assert body["mask_shape"] == [1, 1]
+    assert body["prompt"] == "the dog"
+    assert body["threshold"] == pytest.approx(0.5)
+
+
+def test_matte_default_prompt(client):
+    image = base64.b64encode(PNG_1X1).decode("ascii")
+    response = client.post("/matte", json={"image": image})
+    assert response.status_code == 200
+    assert response.json()["prompt"] == "the main foreground subject"
+
+
+def test_matte_requires_image(client):
+    response = client.post("/matte", json={})
+    assert response.status_code == 422
 
 
 def test_auth_rejects_missing_key(client_auth):

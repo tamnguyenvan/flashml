@@ -11,6 +11,7 @@ SIMPLECLICK_GDRIVE_ID="${SIMPLECLICK_GDRIVE_ID:-1GXk6q5fwKo2twkY5ZZGjVKCgJv7XeLA
 export FLASHML_HOME CONDA_ROOT
 mkdir -p "${FLASHML_HOME}/third_party" "${FLASHML_HOME}/weights/simpleclick" \
   "${FLASHML_HOME}/weights/oneformer" "${FLASHML_HOME}/weights/flux" \
+  "${FLASHML_HOME}/weights/multimatte" \
   "${FLASHML_HOME}/weights/huggingface" \
   "${FLASHML_HOME}/logs"
 
@@ -61,6 +62,7 @@ create_env flashml-moge "${FLASHML_HOME}/envs/environment-moge.yml"
 create_env flashml-simpleclick "${FLASHML_HOME}/envs/environment-simpleclick.yml"
 create_env flashml-oneformer "${FLASHML_HOME}/envs/environment-oneformer.yml"
 create_env flashml-flux "${FLASHML_HOME}/envs/environment-flux.yml"
+create_env flashml-multimatte "${FLASHML_HOME}/envs/environment-multimatte.yml"
 
 conda run --no-capture-output -n flashml-api python -m pip install --upgrade pip
 conda run --no-capture-output -n flashml-api python -m pip install -e "${FLASHML_HOME}"
@@ -197,6 +199,31 @@ print(f"object-removal LoRA ready ({len(sd)} tensors) -> {dest}")
 PY
 else
   echo "Object-removal LoRA already exists at ${FLUX_LORA}"
+fi
+
+echo "Setting up MultiMatte (nobg + SAM3) environment..."
+conda run --no-capture-output -n flashml-multimatte python -m pip install --upgrade pip
+conda run --no-capture-output -n flashml-multimatte python -m pip install \
+  torch torchvision --index-url https://download.pytorch.org/whl/cu128
+conda run --no-capture-output -n flashml-multimatte python -m pip install \
+  "transformers>=5.5" "huggingface_hub>=1.22" "nobg>=0.3" "loadimg>=0.5" \
+  "Pillow>=9.5,<12" "numpy<2" "scipy>=1.10,<1.16"
+conda run --no-capture-output -n flashml-multimatte python -m pip install -e "${FLASHML_HOME}"
+
+if [ ! -f "${FLASHML_HOME}/weights/multimatte/config.json" ]; then
+  echo "Downloading feyninc/multimatte from Hugging Face..."
+  HF_HOME="${FLASHML_HOME}/weights/huggingface" \
+    conda run --no-capture-output -n flashml-multimatte python - <<'PY'
+from huggingface_hub import snapshot_download
+import os
+repo_id = os.environ.get("FLASHML_MULTIMATTE_MODEL_ID", "feyninc/multimatte")
+local_dir = os.environ["FLASHML_HOME"] + "/weights/multimatte"
+print(f"Downloading {repo_id} -> {local_dir}")
+snapshot_download(repo_id=repo_id, local_dir=local_dir)
+print("MultiMatte weights ready")
+PY
+else
+  echo "MultiMatte weights already exist at ${FLASHML_HOME}/weights/multimatte"
 fi
 
 echo

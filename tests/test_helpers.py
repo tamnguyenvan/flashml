@@ -11,6 +11,7 @@ def test_enabled_routes_all():
         "interactive-segment",
         "segment",
         "remove",
+        "matte",
     }
 
 

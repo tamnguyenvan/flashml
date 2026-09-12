@@ -71,6 +71,32 @@ class SegmentResponse(BaseModel):
     masks: dict[str, list[SurfaceMask]]
 
 
+class MatteRequest(BaseModel):
+    image: str = Field(
+        ...,
+        min_length=1,
+        description="PNG/JPEG as raw base64 or a data URL.",
+    )
+    prompt: str | None = Field(
+        default=None,
+        description="Natural-language concept to matte (e.g. 'the dog'). Omit for the default foreground subject.",
+    )
+    threshold: float | None = Field(
+        default=None,
+        gt=0.0,
+        lt=1.0,
+        description="Alpha cutoff for the binary mask. Defaults to the server setting.",
+    )
+
+
+class MatteResponse(BaseModel):
+    mask: str = Field(..., description="PNG mask encoded as base64 (no data URL prefix).")
+    mask_format: str = "png"
+    mask_shape: list[int] = Field(..., min_length=2, max_length=2)
+    prompt: str
+    threshold: float
+
+
 class ServiceStatus(BaseModel):
     enabled: bool
     backend: str

@@ -7,12 +7,13 @@ from typing import Literal
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-RouteName = Literal["reconstruct", "interactive-segment", "segment", "remove"]
+RouteName = Literal["reconstruct", "interactive-segment", "segment", "remove", "matte"]
 ALL_ROUTES: tuple[RouteName, ...] = (
     "reconstruct",
     "interactive-segment",
     "segment",
     "remove",
+    "matte",
 )
 
 
@@ -40,6 +41,7 @@ class Settings(BaseSettings):
     interactive_segment_url: str | None = None
     segment_url: str | None = None
     remove_url: str | None = None
+    matte_url: str | None = None
 
     moge_model_repo: str = "Ruicheng/moge-3-vitg"
     moge_source_repo: str = "https://github.com/microsoft/MoGe.git"
@@ -82,6 +84,12 @@ class Settings(BaseSettings):
     flux_guidance: float = 0.0
     flux_max_longest_size: int = 1024
 
+    multimatte_model_id: str = "feyninc/multimatte"
+    multimatte_model_dir: Path = Path("/workspace/flashml/weights/multimatte")
+    multimatte_default_prompt: str = "the main foreground subject"
+    multimatte_threshold: float = 0.5
+    multimatte_max_longest_size: int = 2048
+
     request_id_header: str = "X-Request-ID"
 
     @field_validator(
@@ -89,6 +97,7 @@ class Settings(BaseSettings):
         "interactive_segment_url",
         "segment_url",
         "remove_url",
+        "matte_url",
         mode="before",
     )
     @classmethod

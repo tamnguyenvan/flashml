@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "flashml"
 version = "1.0.0"
-description = "Unified FastAPI inference service for MoGe, SimpleClick, OneFormer, and FLUX.2 klein."
+description = "Unified FastAPI inference service for MoGe, SimpleClick, OneFormer, FLUX.2 klein, and MultiMatte."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

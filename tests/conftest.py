@@ -12,6 +12,7 @@ from flashml.app import create_app
 from flashml.config import Settings
 from flashml.schemas import (
     InteractiveSegmentResponse,
+    MatteResponse,
     SegmentResponse,
     ServiceStatus,
     SurfaceMask,
@@ -32,6 +33,8 @@ def _settings(**kwargs) -> Settings:
         reconstruct_url=None,
         interactive_segment_url=None,
         segment_url=None,
+        remove_url=None,
+        matte_url=None,
     )
     defaults.update(kwargs)
     return Settings(_env_file=None, **defaults)
@@ -112,6 +115,25 @@ class FakeFlux:
         return PNG_1X1
 
 
+class FakeMultiMatte:
+    backend = "local"
+
+    def preload(self) -> None:
+        return None
+
+    def status(self) -> ServiceStatus:
+        return ServiceStatus(enabled=True, backend="local", ready=True, detail="fake")
+
+    def segment(self, request):
+        return MatteResponse(
+            mask=base64.b64encode(PNG_1X1).decode("ascii"),
+            mask_format="png",
+            mask_shape=[1, 1],
+            prompt=request.prompt or "the main foreground subject",
+            threshold=request.threshold or 0.5,
+        )
+
+
 @pytest.fixture
 def client():
     app = create_app(_settings())
@@ -120,6 +142,7 @@ def client():
         AppState.simpleclick = FakeSimpleClick()
         AppState.oneformer = FakeOneFormer()
         AppState.flux = FakeFlux()
+        AppState.multimatte = FakeMultiMatte()
         yield test_client
 
 
@@ -131,4 +154,5 @@ def client_auth():
         AppState.simpleclick = FakeSimpleClick()
         AppState.oneformer = FakeOneFormer()
         AppState.flux = FakeFlux()
+        AppState.multimatte = FakeMultiMatte()
         yield test_client

@@ -8,12 +8,13 @@ Unified FastAPI service for several inference stacks, without changing their alg
 | `POST /interactive-segment` | SimpleClick | JSON image + clicks | PNG mask (base64) |
 | `POST /segment` | OneFormer ADE20K | JSON image | wall / floor / rug PNG masks |
 | `POST /remove` | FLUX.2 klein 4B (int8) image editing | multipart image (`file`) + mask (`mask`) | object-removed PNG |
+| `POST /matte` | MultiMatte (nobg / SAM 3) | JSON image + prompt | PNG mask (base64) |
 
 `POST /predict` is kept as an alias of `/reconstruct` for the existing DreamRoom MoGe client.
 
 The models cannot share one Python environment (different PyTorch / MMCV / Transformers stacks). On Vast.ai this repo therefore runs:
 
-1. Four GPU workers (ports 8001–8004), each in its own Miniconda env
+1. Five GPU workers (ports 8001–8005), each in its own Miniconda env
 2. One public FastAPI gateway on port **8000** that validates requests and proxies to those workers
 3. **Supervisor** to keep the processes alive
 
@@ -33,6 +34,7 @@ Routers stay HTTP-only. Inference lives in `src/flashml/services/`.
   - [Interactive segment](#interactive-segment)
   - [Segment](#segment)
   - [Remove](#remove)
+  - [Matte](#matte)
 - [Health](#health)
 - [Deploying on Vast.ai](#deploying-on-vast-ai)
   - [Vast.ai setup](#vast-ai-setup)
@@ -64,7 +66,7 @@ Install the package (editable) with its dev dependencies:
 python -m pip install -e ".[dev]"
 ```
 
-For on-instance GPU deployments, `scripts/setup_conda.sh` installs Miniconda if needed, creates five environments (`flashml-api`, `flashml-moge`, `flashml-simpleclick`, `flashml-oneformer`, `flashml-flux`), clones MoGe / SimpleClick, and downloads model weights. The first run is long. See [Deploying on Vast.ai](#deploying-on-vast-ai).
+For on-instance GPU deployments, `scripts/setup_conda.sh` installs Miniconda if needed, creates six environments (`flashml-api`, `flashml-moge`, `flashml-simpleclick`, `flashml-oneformer`, `flashml-flux`, `flashml-multimatte`), clones MoGe / SimpleClick, and downloads model weights. The first run is long. See [Deploying on Vast.ai](#deploying-on-vast-ai).
 
 ## Usage
 
@@ -80,7 +82,7 @@ flashml --host 0.0.0.0 --port 8000
 uvicorn flashml.app:app --host 0.0.0.0 --port 8000
 ```
 
-Configuration is read from `FLASHML_*` environment variables. When running under Supervisor, process environment variables are configured directly in `conf/supervisord.conf`. Set `FLASHML_ENABLED_ROUTES` to restrict which routes load (`all`, `reconstruct`, `interactive-segment`, `segment`, or `remove`).
+Configuration is read from `FLASHML_*` environment variables. When running under Supervisor, process environment variables are configured directly in `conf/supervisord.conf`. Set `FLASHML_ENABLED_ROUTES` to restrict which routes load (`all`, `reconstruct`, `interactive-segment`, `segment`, `matte`, or `remove`).
 
 ### API-key authentication (optional)
 
@@ -104,7 +106,7 @@ python -m pytest
 
 ### Launch GPU workers
 
-After `scripts/setup_conda.sh` has created the environments, start the gateway plus the four workers under Supervisor:
+After `scripts/setup_conda.sh` has created the environments, start the gateway plus the five workers under Supervisor:
 
 ```bash
 ./scripts/start.sh            # foreground (logs stream to terminal)
@@ -167,6 +169,24 @@ These match the previous Modal endpoints.
 
 Returns the inpainted result as `image/png`.
 
+### Matte
+
+`POST /matte` — JSON
+
+```json
+{
+  "image": "data:image/png;base64,...",
+  "prompt": "the dog",
+  "threshold": 0.5
+}
+```
+
+- `image` (required) — PNG/JPEG as raw base64 or a data URL.
+- `prompt` (optional) — natural-language concept to matte (e.g. `"the dog"`); omit for the default foreground subject.
+- `threshold` (optional) — alpha cutoff in (0, 1) for the binary mask; defaults to `FLASHML_MULTIMATTE_THRESHOLD` (0.5).
+
+Returns `{ mask, mask_format, mask_shape, prompt, threshold }` with `mask` as base64 PNG (no data URL prefix).
+
 Errors are JSON: `{ "error", "code", "request_id", "details?" }` with `X-Request-ID` on every response.
 
 ### Health
@@ -194,7 +214,7 @@ Open port **8000** on the Vast.ai instance. Workers bind to `127.0.0.1` only.
 
 ### GPU / memory notes
 
-VRAM: all checkpoints loaded at once wants a large GPU (MoGe-3 ViT-G + SimpleClick ViT-H + OneFormer Swin-L + FLUX.2-klein-4B int8 ~8.3 GB). If you OOM, stop unused Supervisor programs, for example:
+VRAM: all checkpoints loaded at once wants a large GPU (MoGe-3 ViT-G + SimpleClick ViT-H + OneFormer Swin-L + FLUX.2-klein-4B int8 ~8.3 GB + MultiMatte SAM 3 ~0.8B). If you OOM, stop unused Supervisor programs, for example:
 
 ```bash
 supervisorctl -c "$FLASHML_HOME/conf/supervisord.conf" stop flashml-oneformer
