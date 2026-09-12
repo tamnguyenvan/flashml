@@ -8,6 +8,7 @@ Unified FastAPI service for several inference stacks, without changing their alg
 | `POST /interactive-segment` | SimpleClick | JSON image + clicks | PNG mask (base64) |
 | `POST /segment` | OneFormer ADE20K | JSON image | wall / floor / rug PNG masks |
 | `POST /remove` | FLUX.2 klein 4B (int8) image editing | multipart image (`file`) + mask (`mask`) | object-removed PNG |
+| `POST /edit` | FLUX.2 klein 4B (int8) free-prompt editing | multipart image (`file`) + `prompt` | edited PNG |
 | `POST /matte` | MultiMatte (nobg / SAM 3) | JSON image + prompt | PNG mask (base64) |
 
 `POST /predict` is kept as an alias of `/reconstruct` for the existing DreamRoom MoGe client.
@@ -34,6 +35,7 @@ Routers stay HTTP-only. Inference lives in `src/flashml/services/`.
   - [Interactive segment](#interactive-segment)
   - [Segment](#segment)
   - [Remove](#remove)
+  - [Edit](#edit)
   - [Matte](#matte)
 - [Health](#health)
 - [Deploying on Vast.ai](#deploying-on-vast-ai)
@@ -82,7 +84,7 @@ flashml --host 0.0.0.0 --port 8000
 uvicorn flashml.app:app --host 0.0.0.0 --port 8000
 ```
 
-Configuration is read from `FLASHML_*` environment variables. When running under Supervisor, process environment variables are configured directly in `conf/supervisord.conf`. Set `FLASHML_ENABLED_ROUTES` to restrict which routes load (`all`, `reconstruct`, `interactive-segment`, `segment`, `matte`, or `remove`).
+Configuration is read from `FLASHML_*` environment variables. When running under Supervisor, process environment variables are configured directly in `conf/supervisord.conf`. Set `FLASHML_ENABLED_ROUTES` to restrict which routes load (`all`, `reconstruct`, `interactive-segment`, `segment`, `matte`, `remove`, or `edit`).
 
 ### API-key authentication (optional)
 
@@ -168,6 +170,17 @@ These match the previous Modal endpoints.
 - `max_size` 64–4096, default `1024` (longest-side limit; larger images are downscaled)
 
 Returns the inpainted result as `image/png`.
+
+### Edit
+
+`POST /edit` — `multipart/form-data` (same FLUX.2 klein worker as `/remove`, but with a free-text prompt and the object-removal LoRA disabled)
+
+- `file` (required) — RGB source image (PNG or JPEG) to edit
+- `prompt` (required) — free-text edit instruction, max 2000 chars (e.g. `"replace the sofa with a wooden bench"`)
+- `max_size` 64–4096, default `1024` (longest-side limit; larger images are downscaled)
+- `seed` optional — integer for reproducible output
+
+Returns the edited result as `image/png`.
 
 ### Matte
 

@@ -12,7 +12,7 @@ from flashml.config import Settings, get_settings
 from flashml.errors import register_exception_handlers
 from flashml.logging import setup_logging
 from flashml.middleware import APIKeyMiddleware, RequestContextMiddleware
-from flashml.routers import health, interactive_segment, matte, reconstruct, remove, segment
+from flashml.routers import edit, health, interactive_segment, matte, reconstruct, remove, segment
 from flashml.services.flux import build_flux_service
 from flashml.services.moge import build_moge_service
 from flashml.services.multimatte import build_multimatte_service
@@ -39,10 +39,10 @@ def _load_enabled_services(settings: Settings) -> None:
         AppState.oneformer = build_oneformer_service(settings)
         if settings.preload and settings.segment_url is None:
             AppState.oneformer.preload()
-    if settings.is_enabled("remove"):
-        logger.info("Initializing remove backend")
+    if settings.is_enabled("remove") or settings.is_enabled("edit"):
+        logger.info("Initializing flux backend (remove/edit)")
         AppState.flux = build_flux_service(settings)
-        if settings.preload and settings.remove_url is None:
+        if settings.preload and settings.remove_url is None and settings.edit_url is None:
             AppState.flux.preload()
     if settings.is_enabled("matte"):
         logger.info("Initializing matte backend")
@@ -91,6 +91,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.include_router(segment.router)
     if settings.is_enabled("remove"):
         app.include_router(remove.router)
+    if settings.is_enabled("edit"):
+        app.include_router(edit.router)
     if settings.is_enabled("matte"):
         app.include_router(matte.router)
 

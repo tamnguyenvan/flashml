@@ -35,6 +35,7 @@ def _settings(**kwargs) -> Settings:
         segment_url=None,
         remove_url=None,
         matte_url=None,
+        edit_url=None,
     )
     defaults.update(kwargs)
     return Settings(_env_file=None, **defaults)
@@ -112,6 +113,9 @@ class FakeFlux:
         return ServiceStatus(enabled=True, backend="local", ready=True, detail="fake")
 
     def remove(self, image_bytes: bytes, *, max_size: int) -> bytes:
+        return PNG_1X1
+
+    def edit(self, image_bytes: bytes, *, prompt: str, max_size: int, seed=None) -> bytes:
         return PNG_1X1
 
 

@@ -13,18 +13,54 @@ from __future__ import annotations
 import io
 import logging
 import threading
+from contextlib import contextmanager
 from pathlib import Path
 
 from PIL import Image
 
 from flashml.config import Settings
-from flashml.errors import InferenceError, InvalidImageError
+from flashml.errors import InferenceError, InputValidationError, InvalidImageError
 from flashml.schemas import ServiceStatus
 from flashml.services.proxy import InferenceProxy
 
 logger = logging.getLogger(__name__)
 
 _LORA_NAME = "object_remove"
+
+
+def validate_edit_prompt(prompt: object, *, max_chars: int) -> str:
+    """Strip and validate a free-text edit prompt."""
+    if not isinstance(prompt, str):
+        raise InputValidationError("prompt must be a string")
+    cleaned = prompt.strip()
+    if not cleaned:
+        raise InputValidationError("prompt must be a non-empty string")
+    if len(cleaned) > max_chars:
+        raise InputValidationError(f"prompt must be at most {max_chars} characters")
+    return cleaned
+
+
+@contextmanager
+def _lora_disabled(pipe):
+    """Run a block with the object-removal LoRA adapter disabled.
+
+    ``/edit`` takes a free-text prompt, so the removal LoRA (trained on its own
+    trigger phrase) must not bias the result. Uses peft's ``disable_adapter``
+    context when the loaded transformer exposes it; otherwise runs as-is with a
+    warning rather than failing the request.
+    """
+    transformer = getattr(pipe, "transformer", None)
+    disable = getattr(transformer, "disable_adapter", None)
+    if callable(disable):
+        try:
+            with disable():
+                yield
+            return
+        except Exception:
+            logger.warning("could not disable LoRA adapter; /edit runs with LoRA active", exc_info=True)
+    else:
+        logger.warning("/edit runs with LoRA active: transformer exposes no disable_adapter")
+    yield
 
 
 def _decode_rgb(image_bytes: bytes):
@@ -74,6 +110,46 @@ class FluxService:
 
     def remove(self, image_bytes: bytes, *, max_size: int) -> bytes:
         self.preload()
+        image = self._prepare_conditioning(image_bytes, max_size=max_size)
+
+        with self._lock:
+            result = self._infer_locked(image)
+
+        if result.size != image.size:
+            result = result.resize(image.size, Image.BILINEAR)
+
+        return _pil_to_png(result)
+
+    def edit(
+        self,
+        image_bytes: bytes,
+        *,
+        prompt: object,
+        max_size: int,
+        seed: int | None = None,
+    ) -> bytes:
+        """Free-prompt image edit. Same weights as ``remove`` but the caller's
+        prompt is used and the object-removal LoRA is disabled."""
+        self.preload()
+        cleaned_prompt = validate_edit_prompt(prompt, max_chars=self.settings.flux_max_prompt_chars)
+        image = self._prepare_conditioning(image_bytes, max_size=max_size)
+
+        generator = None
+        if seed is not None:
+            import torch
+
+            generator = torch.Generator(device=self.device).manual_seed(seed)
+
+        with self._lock:
+            with _lora_disabled(self.pipe):
+                result = self._infer_locked(image, prompt=cleaned_prompt, generator=generator)
+
+        if result.size != image.size:
+            result = result.resize(image.size, Image.BILINEAR)
+
+        return _pil_to_png(result)
+
+    def _prepare_conditioning(self, image_bytes: bytes, *, max_size: int):
         image = _decode_rgb(image_bytes)
 
         longest = max(image.size)
@@ -83,14 +159,7 @@ class FluxService:
                 max(1, round(image.height * max_size / longest)),
             )
             image = image.resize(new_size, Image.BILINEAR)
-
-        with self._lock:
-            result = self._infer_locked(image)
-
-        if result.size != image.size:
-            result = result.resize(image.size, Image.BILINEAR)
-
-        return _pil_to_png(result)
+        return image
 
     def _load_locked(self) -> None:
         import importlib.util
@@ -199,9 +268,9 @@ class FluxService:
             self.settings.flux_lora_fuse,
         )
 
-    def _infer_locked(self, conditioning):
+    def _infer_locked(self, conditioning, prompt: str | None = None, generator=None):
         try:
-            prompt = self.settings.flux_prompt
+            prompt = prompt or self.settings.flux_prompt
             steps = self.settings.flux_num_inference_steps
             guidance = self.settings.flux_guidance
 
@@ -210,18 +279,21 @@ class FluxService:
             multiple_of = self.pipe.vae_scale_factor * 2 if hasattr(self.pipe, "vae_scale_factor") else 32
             width, height = _round_dims(conditioning.width, conditioning.height, multiple_of)
 
-            result = self.pipe(
+            call_kwargs = dict(
                 image=conditioning,
                 prompt=prompt,
                 height=height,
                 width=width,
                 num_inference_steps=steps,
                 guidance_scale=guidance,
-            ).images[0]
+            )
+            if generator is not None:
+                call_kwargs["generator"] = generator
+            result = self.pipe(**call_kwargs).images[0]
             return result
         except Exception as exc:
-            logger.exception("FLUX object-removal inference failed")
-            raise InferenceError("FLUX object-removal inference failed") from exc
+            logger.exception("FLUX inference failed")
+            raise InferenceError("FLUX inference failed") from exc
 
 
 class RemoteFluxService:
@@ -234,17 +306,23 @@ class RemoteFluxService:
             timeout_s=settings.inference_timeout_s,
             name="FLUX.2-klein-4B",
         )
+        self._edit_proxy = InferenceProxy(
+            settings.edit_url or settings.remove_url or "",
+            timeout_s=settings.inference_timeout_s,
+            name="FLUX.2-klein-4B",
+        )
         self._ready = True
 
     def preload(self) -> None:
         return None
 
     def status(self) -> ServiceStatus:
+        detail = self.settings.remove_url or self.settings.edit_url
         return ServiceStatus(
             enabled=True,
             backend=self.backend,
             ready=self._ready,
-            detail=self.settings.remove_url,
+            detail=detail,
         )
 
     async def remove_remote(
@@ -264,8 +342,30 @@ class RemoteFluxService:
         )
         return result.content
 
+    async def edit_remote(
+        self,
+        image_bytes: bytes,
+        *,
+        image_content_type: str | None,
+        prompt: str,
+        max_size: int,
+        seed: int | None,
+    ) -> bytes:
+        data: dict[str, str] = {"prompt": prompt, "max_size": str(max_size)}
+        if seed is not None:
+            data["seed"] = str(seed)
+        result = await self._edit_proxy.request(
+            "POST",
+            "/edit",
+            data=data,
+            files={
+                "file": ("image", image_bytes, image_content_type or "image/png"),
+            },
+        )
+        return result.content
+
 
 def build_flux_service(settings: Settings) -> FluxService | RemoteFluxService:
-    if settings.remove_url:
+    if settings.remove_url or settings.edit_url:
         return RemoteFluxService(settings)
     return FluxService(settings)

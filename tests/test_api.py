@@ -114,6 +114,45 @@ def test_matte_requires_image(client):
     assert response.status_code == 422
 
 
+def test_edit_ok(client):
+    response = client.post(
+        "/edit",
+        files={"file": ("room.png", PNG_1X1, "image/png")},
+        data={"prompt": "replace the sofa with a wooden bench", "max_size": "800"},
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/png")
+    assert response.content == PNG_1X1
+
+
+def test_edit_ok_with_seed(client):
+    response = client.post(
+        "/edit",
+        files={"file": ("room.png", PNG_1X1, "image/png")},
+        data={"prompt": "make it sunset", "seed": "42"},
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/png")
+
+
+def test_edit_requires_prompt(client):
+    response = client.post(
+        "/edit",
+        files={"file": ("room.png", PNG_1X1, "image/png")},
+    )
+    assert response.status_code in (422, 400)
+
+
+def test_edit_rejects_blank_prompt(client):
+    response = client.post(
+        "/edit",
+        files={"file": ("room.png", PNG_1X1, "image/png")},
+        data={"prompt": "   "},
+    )
+    assert response.status_code == 422
+    assert response.json()["code"] == "validation_error"
+
+
 def test_auth_rejects_missing_key(client_auth):
     response = client_auth.post(
         "/reconstruct",

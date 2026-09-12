@@ -12,6 +12,7 @@ def test_enabled_routes_all():
         "segment",
         "remove",
         "matte",
+        "edit",
     }
 
 

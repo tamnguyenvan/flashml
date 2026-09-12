@@ -4,13 +4,15 @@ import pytest
 from PIL import Image
 
 from flashml.config import Settings
-from flashml.errors import InvalidImageError
+from flashml.errors import InputValidationError, InvalidImageError
 from flashml.services.flux import (
     FluxService,
     RemoteFluxService,
     _decode_rgb,
+    _lora_disabled,
     _pil_to_png,
     _round_dims,
+    validate_edit_prompt,
 )
 from tests.conftest import PNG_1X1
 
@@ -94,3 +96,117 @@ def test_remote_flux_service():
     assert status.backend == "http"
     assert status.ready is True
     assert status.detail == "http://remote:8000"
+
+
+def test_remote_flux_service_prefers_edit_url_fallback():
+    settings = Settings(_env_file=None, edit_url="http://edit:8004")
+    service = RemoteFluxService(settings)
+    assert service.status().detail == "http://edit:8004"
+
+
+def test_validate_edit_prompt():
+    assert validate_edit_prompt("  make it sunset  ", max_chars=2000) == "make it sunset"
+    with pytest.raises(InputValidationError):
+        validate_edit_prompt("   ", max_chars=2000)
+    with pytest.raises(InputValidationError):
+        validate_edit_prompt("", max_chars=2000)
+    with pytest.raises(InputValidationError):
+        validate_edit_prompt(None, max_chars=2000)
+    with pytest.raises(InputValidationError):
+        validate_edit_prompt("x" * 2001, max_chars=2000)
+
+
+def test_edit_forwards_prompt_and_seed(monkeypatch):
+    import sys
+    import types
+
+    settings = Settings(_env_file=None, require_cuda=False)
+    service = FluxService(settings)
+    service._ready = True
+    service.device = "cpu"
+
+    seen: dict = {}
+
+    class FakeGenerator:
+        def __init__(self, device=None):
+            self.device = device
+            self._seed = None
+
+        def manual_seed(self, seed):
+            self._seed = seed
+            return self
+
+    fake_torch = types.SimpleNamespace(Generator=FakeGenerator)
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+
+    def mock_infer_locked(conditioning, prompt=None, generator=None):
+        seen["prompt"] = prompt
+        seen["generator"] = generator
+        seen["size"] = conditioning.size
+        return Image.new("RGB", (conditioning.width, conditioning.height), color="red")
+
+    service._infer_locked = mock_infer_locked
+
+    result_bytes = service.edit(
+        _create_test_png(50, 50, "RGB"),
+        prompt="  make it sunset  ",
+        max_size=100,
+        seed=7,
+    )
+    assert seen["prompt"] == "make it sunset"
+    assert seen["size"] == (50, 50)
+    assert isinstance(seen["generator"], FakeGenerator)
+    assert seen["generator"]._seed == 7
+    assert Image.open(io.BytesIO(result_bytes)).size == (50, 50)
+
+
+def test_edit_without_seed_passes_no_generator():
+    settings = Settings(_env_file=None, require_cuda=False)
+    service = FluxService(settings)
+    service._ready = True
+    service.device = "cpu"
+
+    seen: dict = {}
+
+    def mock_infer_locked(conditioning, prompt=None, generator=None):
+        seen["generator"] = generator
+        return Image.new("RGB", (conditioning.width, conditioning.height), color="red")
+
+    service._infer_locked = mock_infer_locked
+    service.edit(_create_test_png(20, 20, "RGB"), prompt="repaint", max_size=100)
+    assert seen["generator"] is None
+
+
+def test_edit_validates_prompt_before_inference():
+    settings = Settings(_env_file=None, require_cuda=False)
+    service = FluxService(settings)
+    service._ready = True
+    with pytest.raises(InputValidationError):
+        service.edit(_create_test_png(10, 10, "RGB"), prompt="  ", max_size=100)
+
+
+def test_lora_disabled_uses_adapter_context():
+    entered: list[bool] = []
+
+    class FakeTransformer:
+        from contextlib import contextmanager
+
+        @contextmanager
+        def disable_adapter(self):
+            entered.append(True)
+            yield
+
+    class FakePipe:
+        transformer = FakeTransformer()
+
+    with _lora_disabled(FakePipe()):
+        pass
+    assert entered == [True]
+
+
+def test_lora_disabled_falls_back_without_adapter():
+    class FakePipe:
+        transformer = object()
+
+    with _lora_disabled(FakePipe()):
+        pass

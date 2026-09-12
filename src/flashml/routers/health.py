@@ -19,6 +19,7 @@ def _services() -> dict[str, ServiceStatus]:
         "segment": AppState.oneformer,
         "remove": AppState.flux,
         "matte": AppState.multimatte,
+        "edit": AppState.flux,
     }
     for name, service in mapping.items():
         if not settings.is_enabled(name):  # type: ignore[arg-type]

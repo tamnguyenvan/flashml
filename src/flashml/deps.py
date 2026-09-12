@@ -28,6 +28,12 @@ def get_flux():
     return AppState.flux
 
 
+def get_edit():
+    if AppState.flux is None:
+        raise DependencyUnavailableError("edit service is not enabled")
+    return AppState.flux
+
+
 def get_multimatte():
     if AppState.multimatte is None:
         raise DependencyUnavailableError("matte service is not enabled")
