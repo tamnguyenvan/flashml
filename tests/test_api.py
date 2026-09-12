@@ -75,22 +75,6 @@ def test_segment_ok(client):
     assert "wall" in body["masks"]
 
 
-def test_remove_ok(client):
-    response = client.post(
-        "/remove",
-        files={"file": ("room.png", PNG_1X1, "image/png")},
-        data={"max_size": "800"},
-    )
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("image/png")
-    assert response.content == PNG_1X1
-
-
-def test_remove_requires_file(client):
-    response = client.post("/remove")
-    assert response.status_code in (422, 400)
-
-
 def test_matte_ok(client):
     image = "data:image/png;base64," + base64.b64encode(PNG_1X1).decode("ascii")
     response = client.post("/matte", json={"image": image, "prompt": "the dog"})

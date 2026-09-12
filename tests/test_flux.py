@@ -12,6 +12,7 @@ from flashml.services.flux import (
     _lora_disabled,
     _pil_to_png,
     _round_dims,
+    build_flux_service,
     validate_edit_prompt,
 )
 from tests.conftest import PNG_1X1
@@ -46,29 +47,29 @@ def test_pil_to_png():
     assert loaded.mode == "RGB"
 
 
-def test_flux_service_remove_resizing_and_crop():
+def test_flux_service_edit_resizing_and_crop():
     settings = Settings(_env_file=None, require_cuda=False)
     service = FluxService(settings)
     service._ready = True
 
-    def mock_infer_locked(conditioning):
+    def mock_infer_locked(conditioning, prompt=None, generator=None):
         return Image.new("RGB", (conditioning.width, conditioning.height), color="red")
 
     service._infer_locked = mock_infer_locked
 
     img_bytes = _create_test_png(50, 50, "RGB")
 
-    result_bytes = service.remove(img_bytes, max_size=100)
+    result_bytes = service.edit(img_bytes, prompt="repaint", max_size=100)
     result_img = Image.open(io.BytesIO(result_bytes))
     assert result_img.size == (50, 50)
 
 
-def test_flux_service_remove_downscales_large_image():
+def test_flux_service_edit_downscales_large_image():
     settings = Settings(_env_file=None, require_cuda=False)
     service = FluxService(settings)
     service._ready = True
 
-    def mock_infer_locked(conditioning):
+    def mock_infer_locked(conditioning, prompt=None, generator=None):
         assert conditioning.size == (100, 50)
         return Image.new("RGB", (100, 50), color="green")
 
@@ -76,7 +77,7 @@ def test_flux_service_remove_downscales_large_image():
 
     img_bytes = _create_test_png(200, 100, "RGB")
 
-    result_bytes = service.remove(img_bytes, max_size=100)
+    result_bytes = service.edit(img_bytes, prompt="repaint", max_size=100)
     result_img = Image.open(io.BytesIO(result_bytes))
     assert result_img.size == (100, 50)
 
@@ -88,20 +89,24 @@ def test_round_dims_rounds_up_to_multiple():
 
 
 def test_remote_flux_service():
-    settings = Settings(_env_file=None, remove_url="http://remote:8000")
+    settings = Settings(_env_file=None, edit_url="http://remote:8004")
     service = RemoteFluxService(settings)
     assert service.backend == "http"
     assert service._ready is True
     status = service.status()
     assert status.backend == "http"
     assert status.ready is True
-    assert status.detail == "http://remote:8000"
+    assert status.detail == "http://remote:8004"
 
 
-def test_remote_flux_service_prefers_edit_url_fallback():
-    settings = Settings(_env_file=None, edit_url="http://edit:8004")
-    service = RemoteFluxService(settings)
-    assert service.status().detail == "http://edit:8004"
+def test_build_flux_service_prefers_local_without_url():
+    settings = Settings(_env_file=None)
+    assert isinstance(build_flux_service(settings), FluxService)
+
+
+def test_build_flux_service_remote_with_edit_url():
+    settings = Settings(_env_file=None, edit_url="http://remote:8004")
+    assert isinstance(build_flux_service(settings), RemoteFluxService)
 
 
 def test_validate_edit_prompt():

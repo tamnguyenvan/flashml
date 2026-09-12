@@ -7,12 +7,11 @@ from typing import Literal
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-RouteName = Literal["reconstruct", "interactive-segment", "segment", "remove", "matte", "edit"]
+RouteName = Literal["reconstruct", "interactive-segment", "segment", "matte", "edit"]
 ALL_ROUTES: tuple[RouteName, ...] = (
     "reconstruct",
     "interactive-segment",
     "segment",
-    "remove",
     "matte",
     "edit",
 )
@@ -41,7 +40,6 @@ class Settings(BaseSettings):
     reconstruct_url: str | None = None
     interactive_segment_url: str | None = None
     segment_url: str | None = None
-    remove_url: str | None = None
     matte_url: str | None = None
     edit_url: str | None = None
 
@@ -99,7 +97,6 @@ class Settings(BaseSettings):
         "reconstruct_url",
         "interactive_segment_url",
         "segment_url",
-        "remove_url",
         "matte_url",
         "edit_url",
         mode="before",

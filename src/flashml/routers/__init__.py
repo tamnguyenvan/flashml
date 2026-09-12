@@ -1,3 +1,3 @@
-from flashml.routers import health, interactive_segment, reconstruct, remove, segment
+from flashml.routers import edit, health, interactive_segment, matte, reconstruct, segment
 
-__all__ = ["health", "interactive_segment", "reconstruct", "remove", "segment"]
+__all__ = ["edit", "health", "interactive_segment", "matte", "reconstruct", "segment"]

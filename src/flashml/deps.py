@@ -22,12 +22,6 @@ def get_oneformer():
     return AppState.oneformer
 
 
-def get_flux():
-    if AppState.flux is None:
-        raise DependencyUnavailableError("remove service is not enabled")
-    return AppState.flux
-
-
 def get_edit():
     if AppState.flux is None:
         raise DependencyUnavailableError("edit service is not enabled")

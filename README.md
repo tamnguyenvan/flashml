@@ -7,7 +7,6 @@ Unified FastAPI service for several inference stacks, without changing their alg
 | `POST /reconstruct` | MoGe-3 | multipart image (`file`) | ZIP (`point_map.npy`, `metadata.json`, optional `output.glb` / debug PNGs) |
 | `POST /interactive-segment` | SimpleClick | JSON image + clicks | PNG mask (base64) |
 | `POST /segment` | OneFormer ADE20K | JSON image | wall / floor / rug PNG masks |
-| `POST /remove` | FLUX.2 klein 4B (int8) image editing | multipart image (`file`) + mask (`mask`) | object-removed PNG |
 | `POST /edit` | FLUX.2 klein 4B (int8) free-prompt editing | multipart image (`file`) + `prompt` | edited PNG |
 | `POST /matte` | MultiMatte (nobg / SAM 3) | JSON image + prompt | PNG mask (base64) |
 
@@ -34,7 +33,6 @@ Routers stay HTTP-only. Inference lives in `src/flashml/services/`.
   - [Reconstruct](#reconstruct)
   - [Interactive segment](#interactive-segment)
   - [Segment](#segment)
-  - [Remove](#remove)
   - [Edit](#edit)
   - [Matte](#matte)
 - [Health](#health)
@@ -84,16 +82,17 @@ flashml --host 0.0.0.0 --port 8000
 uvicorn flashml.app:app --host 0.0.0.0 --port 8000
 ```
 
-Configuration is read from `FLASHML_*` environment variables. When running under Supervisor, process environment variables are configured directly in `conf/supervisord.conf`. Set `FLASHML_ENABLED_ROUTES` to restrict which routes load (`all`, `reconstruct`, `interactive-segment`, `segment`, `matte`, `remove`, or `edit`).
+Configuration is read from `FLASHML_*` environment variables. When running under Supervisor, process environment variables are configured directly in `conf/supervisord.conf`. Set `FLASHML_ENABLED_ROUTES` to restrict which routes load (`all`, `reconstruct`, `interactive-segment`, `segment`, `matte`, or `edit`).
 
 ### API-key authentication (optional)
 
 Requests to the inference routes require an `X-API-Key` header **only if** `FLASHML_API_KEYS` is set (comma-separated list of accepted keys). When it's empty, auth is disabled.
 
 ```bash
-curl -X POST http://localhost:8000/remove \
+curl -X POST http://localhost:8000/edit \
   -H "X-API-Key: <your-key>" \
-  -F file=@masked_room.png
+  -F file=@room.png \
+  -F prompt="replace the sofa with a wooden bench"
 ```
 
 - A missing or invalid key returns `401` with `{"error", "code": "unauthorized", "request_id"}`.
@@ -160,20 +159,9 @@ These match the previous Modal endpoints.
 { "image": "data:image/png;base64,..." }
 ```
 
-### Remove
-
-`POST /remove` — `multipart/form-data`
-
-- `file` (required) — RGB image (PNG or JPEG) with the object to remove already
-  highlighted on it (e.g. a red semi-transparent mask over the object); this is
-  the conditioning image sent to the model
-- `max_size` 64–4096, default `1024` (longest-side limit; larger images are downscaled)
-
-Returns the inpainted result as `image/png`.
-
 ### Edit
 
-`POST /edit` — `multipart/form-data` (same FLUX.2 klein worker as `/remove`, but with a free-text prompt and the object-removal LoRA disabled)
+`POST /edit` — `multipart/form-data` (FLUX.2 klein with a free-text prompt and the object-removal LoRA disabled)
 
 - `file` (required) — RGB source image (PNG or JPEG) to edit
 - `prompt` (required) — free-text edit instruction, max 2000 chars (e.g. `"replace the sofa with a wooden bench"`)

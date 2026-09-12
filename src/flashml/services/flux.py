@@ -1,11 +1,7 @@
-"""FLUX.2 klein 4B (int8) object-removal backend for ``POST /remove``.
+"""FLUX.2 klein 4B (int8) free-prompt editing backend for ``POST /edit``.
 
 Uses the quantized FLUX.2-klein-4B int8 model (image-to-image editing) from
-``aydin99/FLUX.2-klein-4B-int8``.
-
-The client is responsible for marking the object on the conditioning image
-(e.g. drawing a red semi-transparent overlay over it). This image is passed
-straight to the model for editing.
+``aydin99/FLUX.2-klein-4B-int8`` with the caller's text prompt.
 """
 
 from __future__ import annotations
@@ -108,18 +104,6 @@ class FluxService:
             detail=str(self.settings.flux_model_dir),
         )
 
-    def remove(self, image_bytes: bytes, *, max_size: int) -> bytes:
-        self.preload()
-        image = self._prepare_conditioning(image_bytes, max_size=max_size)
-
-        with self._lock:
-            result = self._infer_locked(image)
-
-        if result.size != image.size:
-            result = result.resize(image.size, Image.BILINEAR)
-
-        return _pil_to_png(result)
-
     def edit(
         self,
         image_bytes: bytes,
@@ -128,8 +112,8 @@ class FluxService:
         max_size: int,
         seed: int | None = None,
     ) -> bytes:
-        """Free-prompt image edit. Same weights as ``remove`` but the caller's
-        prompt is used and the object-removal LoRA is disabled."""
+        """Free-prompt image edit. The caller's prompt is used and the
+        object-removal LoRA is disabled for the inference."""
         self.preload()
         cleaned_prompt = validate_edit_prompt(prompt, max_chars=self.settings.flux_max_prompt_chars)
         image = self._prepare_conditioning(image_bytes, max_size=max_size)
@@ -302,12 +286,7 @@ class RemoteFluxService:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self._proxy = InferenceProxy(
-            settings.remove_url or "",
-            timeout_s=settings.inference_timeout_s,
-            name="FLUX.2-klein-4B",
-        )
-        self._edit_proxy = InferenceProxy(
-            settings.edit_url or settings.remove_url or "",
+            settings.edit_url or "",
             timeout_s=settings.inference_timeout_s,
             name="FLUX.2-klein-4B",
         )
@@ -317,30 +296,12 @@ class RemoteFluxService:
         return None
 
     def status(self) -> ServiceStatus:
-        detail = self.settings.remove_url or self.settings.edit_url
         return ServiceStatus(
             enabled=True,
             backend=self.backend,
             ready=self._ready,
-            detail=detail,
+            detail=self.settings.edit_url,
         )
-
-    async def remove_remote(
-        self,
-        image_bytes: bytes,
-        *,
-        image_content_type: str | None,
-        max_size: int,
-    ) -> bytes:
-        result = await self._proxy.request(
-            "POST",
-            "/remove",
-            data={"max_size": str(max_size)},
-            files={
-                "file": ("image", image_bytes, image_content_type or "image/png"),
-            },
-        )
-        return result.content
 
     async def edit_remote(
         self,
@@ -354,7 +315,7 @@ class RemoteFluxService:
         data: dict[str, str] = {"prompt": prompt, "max_size": str(max_size)}
         if seed is not None:
             data["seed"] = str(seed)
-        result = await self._edit_proxy.request(
+        result = await self._proxy.request(
             "POST",
             "/edit",
             data=data,
@@ -366,6 +327,6 @@ class RemoteFluxService:
 
 
 def build_flux_service(settings: Settings) -> FluxService | RemoteFluxService:
-    if settings.remove_url or settings.edit_url:
+    if settings.edit_url:
         return RemoteFluxService(settings)
     return FluxService(settings)

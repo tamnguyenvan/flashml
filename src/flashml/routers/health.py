@@ -17,7 +17,6 @@ def _services() -> dict[str, ServiceStatus]:
         "reconstruct": AppState.moge,
         "interactive-segment": AppState.simpleclick,
         "segment": AppState.oneformer,
-        "remove": AppState.flux,
         "matte": AppState.multimatte,
         "edit": AppState.flux,
     }
